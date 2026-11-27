@@ -1,76 +1,78 @@
-# Phase 0 – Machbarkeit (Spike)
+# Phase 0 – feasibility (spike)
 
-Stand: 27.11.2026 · getestet auf macOS 26 (Apple Silicon) mit einer echten Kunden-Website
-(Astro 5.18, tscms-Backend, Kontaktformular). Windows und Linux sind **noch nicht getestet**.
+As of 2026-11-27 · tested on macOS 26 (Apple Silicon) with a real customer website (Astro 5.18,
+tscms backend, contact form). Windows and Linux were **not tested yet**.
 
-## Ergebnis
+This is a dated report and is not kept up to date.
 
-**Tauri mit Rust ist bestätigt.** Der Kernablauf – Paket erstellen, prüfen, öffnen, ansehen,
-hochladen – läuft ohne Node.js. Bauen mit heruntergeladenem Node funktioniert ebenfalls. Offen
-sind die Tests unter Windows und Linux, das Mitliefern von PHP und rclone sowie die unten
-genannten Blocker für Phase 1b.
+## Result
 
-| Prüfpunkt | Ergebnis |
+**Tauri with Rust is confirmed.** The core workflow – create, verify, open, preview and upload a
+package – runs without Node.js. Building with a downloaded Node.js works as well. Open are the
+tests on Windows and Linux, shipping PHP and rclone, and the blockers for phase 1b listed below.
+
+| Check | Result |
 |---|---|
-| `pack` (870 Dateien inkl. Quellen) | 1,2 s, Paket 5,3 MB |
-| Signatur, Prüfsummen, Absender-Bindung | manipulierte Datei, fremder Absender, Pfad-Ausbruch und geändertes Manifest werden abgelehnt |
-| PHP-Vorschau abgeschottet | Seiten und tscms-Anmeldung laufen; `shell_exec`/`proc_open` gesperrt, Dateien außerhalb des Pakets nicht lesbar, nur `127.0.0.1` |
-| `.htaccess`-Sperren in der Vorschau | durch eigenen Router nachgebildet (siehe Befund 1) |
-| Upload (Testordner statt Server) | `seed` überspringt befüllte Ziele, `protect` erhält Live-Daten, veraltete Dateien werden entfernt, Versionsdatei bleibt erhalten |
-| Node.js 22.12.0 laden + prüfen | 10 s, 201 MB entpackt im Cache, zweiter Aufruf sofort |
-| `npm ci --ignore-scripts` + `astro build` | funktioniert (1 s bzw. 3 s mit warmem npm-Cache) |
-| App-Größe (macOS, release) | `.app` 11,5 MB, DMG 3,6 MB – ohne PHP und rclone |
-| Arbeitsspeicher (release) | Hauptprozess ca. 100 MB, dazu die WebKit-Prozesse des Systems |
+| `pack` (870 files including sources) | 1.2 s, package 5.3 MB |
+| signature, checksums, publisher binding | modified file, other publisher, path traversal and changed manifest are rejected |
+| sandboxed PHP preview | pages and tscms login work; `shell_exec`/`proc_open` disabled, files outside the package not readable, `127.0.0.1` only |
+| `.htaccess` restrictions in the preview | emulated by an own router (see finding 1) |
+| upload (test folder instead of server) | `seed` skips filled targets, `protect` keeps live data, stale files are removed, the version file is kept |
+| download and verify Node.js 22.12.0 | 10 s, 201 MB unpacked in the cache, second call immediate |
+| `npm ci --ignore-scripts` + `astro build` | works (1 s and 3 s with a warm npm cache) |
+| app size (macOS, release) | `.app` 11.5 MB, DMG 3.6 MB – without PHP and rclone |
+| memory (release) | main process about 100 MB, plus the system's WebKit processes |
 
-Tests: 36 Unit- und Integrationstests (`cargo test --workspace`), darunter ein Test mit echtem
-rclone gegen einen lokalen Ordner. `clippy` (pedantic) ohne Befund.
+Tests: 36 unit and integration tests (`cargo test --workspace`), including a test with the real
+rclone against a local folder. `clippy` (pedantic) without findings.
 
-## Befunde
+## Findings
 
-1. **PHP-Testserver ignoriert `.htaccess`.** Ohne Gegenmaßnahme waren in der Vorschau
-   `backend/users/*.json` (Passwort-Hashes) und `backend/config.php` abrufbar. Behoben: Router
-   `apps/desktop/src-tauri/src/router.php` wertet `Require all denied|granted` (auch in
-   `<FilesMatch>`/`<IfModule>`) aus und sperrt versteckte Dateien. Er ist eine Annäherung für die
-   lokale Vorschau, kein Ersatz für die Server-Regeln.
-2. **Blocker 1b: private Paketquelle.** `package-lock.json` lädt `@teleschirm/astro-cms` von
-   `git.nas.local`; beim Kunden scheitert `npm ci`. Lösung in Phase 1: `pack` legt private Pakete
-   als Tarball unter `project/vendor/` ab und schreibt das Lockfile auf `file:`-Verweise um.
-3. **Blocker 1b unter Windows: Umgebungsvariablen in npm-Skripten.**
-   `"build": "ASTRO_TELEMETRY_DISABLED=1 astro build"` läuft unter `cmd.exe` nicht. Lösung: Das
-   Tool setzt `ASTRO_TELEMETRY_DISABLED` selbst und ruft `astro build` direkt auf; die Vorlagen
-   sollten das Präfix entfernen.
-4. **Host-Schlüssel des Servers.** Mit Passwort und ohne `known_hosts_file` prüft rclone den
-   SSH-Host-Schlüssel nicht (Angriff per Man-in-the-Middle möglich). Lösung in Phase 1: `pack`
-   nimmt den Host-Schlüssel des Servers ins Paket auf, das Tool schreibt daraus eine eigene
-   `known_hosts`-Datei.
-5. **Composer-Abhängigkeiten gehören ins Paket.** Ohne `backend/vendor` baut Astro, warnt aber,
-   dass das Backend nicht läuft. In `dist/` ist `vendor/` enthalten; für `project/` muss
-   `include` es aufnehmen (E2).
-6. **Kontaktformular in der Vorschau:** `challenge.php` antwortet mit 500, weil `config.php`
-   (SMTP-Zugang) bewusst nicht im Paket ist. Die Oberfläche sollte das als erwartbar erklären.
-7. **PHP-Anforderungen von tscms:** PHP ≥ 8.2 mit `dom`, `fileinfo`, `json`, `mbstring`,
-   `session`; für Bilder voraussichtlich `gd`. Das mitgelieferte PHP (static-php-cli) braucht
-   genau diese Erweiterungen.
-8. **Node-Cache wächst:** 201 MB je Version. Phase 1 braucht eine Aufräumregel (z. B. nur
-   Versionen geöffneter Projekte behalten).
-9. **Signatur der Node-Prüfsummen:** `SHASUMS256.txt` wird über HTTPS geladen, aber nicht per GPG
-   geprüft. Für Phase 1 die Signatur (`SHASUMS256.txt.sig`) mit den Release-Schlüsseln von Node.js prüfen.
+1. **The PHP test server ignores `.htaccess`.** Without countermeasure, `backend/users/*.json`
+   (password hashes) and `backend/config.php` were reachable in the preview. Fixed: the router
+   `apps/desktop/src-tauri/src/router.php` evaluates `Require all denied|granted` (also inside
+   `<FilesMatch>`/`<IfModule>`) and blocks hidden files. It is an approximation for the local
+   preview, not a replacement for the server's rules.
+2. **Blocker 1b: private package source.** `package-lock.json` loads `@teleschirm/astro-cms` from
+   `git.nas.local`; `npm ci` fails at the customer. Solution in phase 1: `pack` stores private
+   packages as tarballs under `project/vendor/` and rewrites the lockfile to `file:` references.
+3. **Blocker 1b on Windows: environment variables in npm scripts.**
+   `"build": "ASTRO_TELEMETRY_DISABLED=1 astro build"` does not run in `cmd.exe`. Solution: the
+   tool sets `ASTRO_TELEMETRY_DISABLED` itself and calls `astro build` directly; the templates
+   should drop the prefix.
+4. **The server's host key.** With a password and without `known_hosts_file`, rclone does not
+   verify the SSH host key (man-in-the-middle attack possible). Solution in phase 1: `pack`
+   records the server's host key in the package, and the tool writes its own `known_hosts` file
+   from it.
+5. **Composer dependencies belong in the package.** Without `backend/vendor`, Astro builds but
+   warns that the backend does not work. `dist/` contains `vendor/`; for `project/`, `include`
+   has to add it (E2).
+6. **Contact form in the preview:** `challenge.php` answers with 500 because `config.php` (SMTP
+   access) is deliberately not in the package. The UI should explain this as expected.
+7. **PHP requirements of tscms:** PHP ≥ 8.2 with `dom`, `fileinfo`, `json`, `mbstring`,
+   `session`; probably `gd` for images. The shipped PHP (static-php-cli) needs exactly these
+   extensions.
+8. **The Node.js cache grows:** 201 MB per version. Phase 1 needs a cleanup rule (for example,
+   keep only versions of opened projects).
+9. **Signature of the Node.js checksums:** `SHASUMS256.txt` is loaded over HTTPS but not verified
+   with GPG. For phase 1, verify the signature (`SHASUMS256.txt.sig`) with the Node.js release
+   keys.
 
-## Nicht geprüft
+## Not tested
 
-* **Windows und Linux** (WebView2, WebKitGTK, Pfade, Firewall, SmartScreen) – nächster Schritt
-  auf dem Windows-Rechner.
-* **Echter Server-Upload** per SFTP mit Passwort – es fehlt noch ein Test-Webspace.
-* **Abkoppeln von Astro ≥ 7.4 im Dev-Modus** – die Beispiel-Website nutzt Astro 5.
-* **Mitgelieferte Programme:** PHP und rclone kommen noch aus `PATH` bzw. `WM_PHP`/`WM_RCLONE`.
-* **Optik der Oberfläche:** Die App startet fehlerfrei; Darstellung und Bedienung sind noch nicht
-  von Hand durchgesehen.
-* **Verschlüsselte Zugangsdaten (E1)** – nicht Teil des Spikes.
-* Node-Berechtigungsmodell (`--permission`) – nicht versucht.
+* **Windows and Linux** (WebView2, WebKitGTK, paths, firewall, SmartScreen) – next step on the
+  Windows computer.
+* **Real server upload** via SFTP with password – a test webspace is still missing.
+* **Detaching of Astro ≥ 7.4 in development mode** – the sample website uses Astro 5.
+* **Shipped programs:** PHP and rclone still come from `PATH` or `WM_PHP`/`WM_RCLONE`.
+* **Look of the UI:** the app starts without errors; appearance and handling have not been
+  reviewed by hand yet.
+* **Encrypted credentials (E1)** – not part of the spike.
+* Node.js permission model (`--permission`) – not tried.
 
-## Nächste Schritte
+## Next steps
 
-1. Windows-Test: `cargo build`, App starten, Paket öffnen, Vorschau, Upload in Testordner.
-2. Test-Webspace festlegen, echter Upload mit Passwort und Host-Schlüssel.
-3. PHP (static-php-cli) und rclone als Sidecars bauen und mitliefern.
-4. Blocker 2–4 beheben, dann Phase 1a.
+1. Windows test: `cargo build`, start the app, open a package, preview, upload into a test folder.
+2. Choose a test webspace, real upload with password and host key.
+3. Build PHP (static-php-cli) and rclone as sidecars and ship them.
+4. Fix blockers 2–4, then phase 1a.

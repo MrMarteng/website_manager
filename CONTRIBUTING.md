@@ -1,57 +1,62 @@
-# Mitwirken
+# Contributing
 
-## Arbeitsweise
+## Workflow
 
-* Änderungen auf einem Branch, Commit-Nachrichten nach [Conventional Commits](https://www.conventionalcommits.org/).
-* Neues Verhalten braucht einen Test. Dokumentation und Changelog ändern sich im selben Commit
-  (Abschnitt unten).
-* Vor dem Push: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`.
+* Changes go on a branch; commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
+* New behaviour needs a test. Documentation and changelog change in the same commit (see below).
+* Before pushing: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo test --workspace`. The same steps run in CI (`.github/workflows/build.yml`); installers
+  are built there on tags `v*` and on demand.
 
-## Dokumentation, Changelog, Version
+## Documentation, changelog, version
 
-Gehören zur Änderung und kommen in denselben Commit wie der Code.
+**Language:** documentation (`README.md`, `CONTRIBUTING.md`, `docs/`), `CHANGELOG.md`, code
+comments (`//`, `///`, `//!`, comments in JS, CSS, PHP, YAML) and commit messages are in English.
+User interface texts live in `apps/desktop/ui/i18n.js` (German and English).
 
-* **`docs/architektur.md`** beschreibt nur den Ist-Zustand. Ändert sich ein Baustein, Ablauf,
-  Sicherheitsmerkmal, Ablageort oder eine Entscheidung, wird der Abschnitt angepasst. Geplantes
-  gehört nicht hinein.
-* **`docs/formate/*.md`** sind die Spezifikation; Code und Spezifikation ändern sich gemeinsam.
-* **`CHANGELOG.md`** ([Keep a Changelog](https://keepachangelog.com/de/1.1.0/)): jede für Nutzer
-  oder Agentur sichtbare Änderung unter `[Unreleased]` in der passenden Rubrik (`Added`,
-  `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`). Interne Umbauten ohne Wirkung nach
-  außen brauchen keinen Eintrag.
-* **`docs/spike/*.md`** sind datierte Berichte und werden nicht nachgeführt.
+These belong to the change and go into the same commit as the code:
 
-**Versionierung** nach [Semantic Versioning 2.0.0](https://semver.org/lang/de/):
+* **`docs/architecture.md`** describes the current state only. When a building block, flow,
+  security property, storage location or decision changes, the section is updated. Plans do not
+  belong there.
+* **`docs/formats/*.md`** are the specification; code and specification change together.
+* **`CHANGELOG.md`** ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)): every change
+  visible to users or agencies goes under `[Unreleased]` in the matching section (`Added`,
+  `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`). Internal refactorings without external
+  effect need no entry.
+* **`docs/spike/*.md`** are dated reports and are not kept up to date.
 
-* Eine Version für `Cargo.toml` (Workspace), `apps/desktop/src-tauri/tauri.conf.json` und
-  `apps/desktop/package.json`; der Test `version_sync` prüft die Übereinstimmung.
-* `0.y.z` bis zur ersten öffentlichen Version: `y` bei neuen Funktionen oder inkompatiblen
-  Änderungen, `z` bei Fehlerbehebungen.
-* Ab `1.0.0`: **MAJOR** bei inkompatiblen Änderungen an Paketformat, `deploy.conf`,
-  `website-manager.config.json` oder CLI-Optionen, **MINOR** bei neuen abwärtskompatiblen
-  Funktionen, **PATCH** bei Fehlerbehebungen.
-* `format_version` im Manifest ist unabhängig davon und steigt nur bei inkompatiblen Formatänderungen.
-* **Release:** `[Unreleased]` in `## [X.Y.Z] - JJJJ-MM-TT` umbenennen, neuen leeren
-  `[Unreleased]`-Abschnitt anlegen, Version an allen drei Stellen anheben, Vergleichslinks am Ende
-  des Changelogs ergänzen, nach dem Merge Tag `vX.Y.Z` setzen.
+**Versioning** follows [Semantic Versioning 2.0.0](https://semver.org/):
 
-## Rust-Guideline
+* One version for `Cargo.toml` (workspace), `apps/desktop/src-tauri/tauri.conf.json` and
+  `apps/desktop/package.json`; the test `version_sync` checks that they match.
+* `0.y.z` until the first public release: `y` for new features or incompatible changes, `z` for
+  fixes.
+* From `1.0.0`: **MAJOR** for incompatible changes to the package format, `deploy.conf`,
+  `website-manager.config.json` or CLI options, **MINOR** for new backwards-compatible features,
+  **PATCH** for fixes.
+* `format_version` in the manifest is independent and only increases for incompatible format
+  changes.
+* **Release:** rename `[Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a new empty `[Unreleased]`
+  section, raise the version in all three places, add the comparison links at the end of the
+  changelog, and tag `vX.Y.Z` after the merge.
 
-* **Formatierung:** `rustfmt` mit Standardeinstellungen, keine eigene `rustfmt.toml`.
-* **Lints:** `clippy` mit `pedantic` (Workspace-Lints in `Cargo.toml`). In der CI ist jede Warnung
-  ein Fehler (`-D warnings`). Ausnahmen nur lokal mit `#[allow(...)]` und kurzer Begründung.
-* **Fehler:** Bibliotheken definieren eigene Fehlertypen mit `thiserror`; Fehler werden mit `?`
-  weitergereicht, nicht verschluckt. Meldungen nennen Datei, Zeile oder Wert, um den es geht.
-* **Kein `unwrap()`/`expect()` außerhalb von Tests** (`clippy::unwrap_used` und
-  `clippy::expect_used` stehen auf `deny`; `clippy.toml` erlaubt sie in Tests).
-* **Sicherheit:** Pfade aus Paketen nie ungeprüft verwenden (`wm_core::archive::safe_relative_path`);
-  Passwörter nie als Programmargument übergeben; externe Programme ohne Shell starten.
-* **Benennung:** beschreibend und suchbar, keine Abkürzungen außer etablierten (`url`, `id`).
-* **Dokumentation:** öffentliche Funktionen mit `///`, inklusive `# Errors`, wenn sie scheitern können.
+## Rust guideline
 
-## Oberfläche
+* **Formatting:** `rustfmt` with default settings, no own `rustfmt.toml`.
+* **Lints:** `clippy` with `pedantic` (workspace lints in `Cargo.toml`). In CI every warning is an
+  error (`-D warnings`). Exceptions only locally with `#[allow(...)]` and a short reason.
+* **Errors:** libraries define their own error types with `thiserror`; errors are passed on with
+  `?`, not swallowed. Messages name the file, line or value concerned.
+* **No `unwrap()`/`expect()` outside tests** (`clippy::unwrap_used` and `clippy::expect_used` are
+  set to `deny`; `clippy.toml` allows them in tests).
+* **Security:** never use paths from packages unchecked (`wm_core::archive::safe_relative_path`);
+  never pass passwords as program arguments; start external programs without a shell.
+* **Naming:** descriptive and searchable, no abbreviations except established ones (`url`, `id`).
+* **Documentation:** public functions with `///`, including `# Errors` if they can fail.
 
-* Die Web-Ansicht ruft nur die freigegebenen Rust-Befehle auf (`apps/desktop/src-tauri/src/commands.rs`);
-  kein Datei-, Prozess- oder Netzwerkzugriff aus JavaScript.
-* Alle Texte stehen in `apps/desktop/ui/i18n.js`; jede Sprache hat dieselben Schlüssel.
+## User interface
+
+* The web view only calls the permitted Rust commands (`apps/desktop/src-tauri/src/commands.rs`);
+  no file, process or network access from JavaScript.
+* All texts live in `apps/desktop/ui/i18n.js`; every language has the same keys.

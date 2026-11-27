@@ -1,6 +1,6 @@
 //! `teleschirm-deploy`: uploads a website according to a `deploy.conf`.
 //!
-//! The format is the one documented in `docs/formate/deploy-conf.md`: a `[server]` block
+//! The format is the one documented in `docs/formats/deploy-conf.md`: a `[server]` block
 //! followed by mappings `<local> -> <remote> | <options>`. Options are `mode=seed|copy`
 //! and `protect=<glob>,<glob>`. The actual transfer is done by rclone.
 
