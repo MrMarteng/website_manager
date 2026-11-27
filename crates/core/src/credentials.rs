@@ -3,8 +3,8 @@
 //! Key derivation Argon2id, encryption AES-256-GCM. The parameters are stored next to the
 //! ciphertext, so they can be raised later without breaking existing files.
 
-use aes_gcm::aead::{Aead, KeyInit};
-use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{self, Aead, KeyInit};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -105,7 +105,7 @@ pub fn encrypt_with(
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|e| CoreError::Credentials(e.to_string()))?;
     let ciphertext = cipher
-        .encrypt(Nonce::from_slice(&nonce), plaintext.as_slice())
+        .encrypt(&nonce_array(&nonce)?, plaintext.as_slice())
         .map_err(|e| CoreError::Credentials(e.to_string()))?;
     let file = EncryptedFile {
         kdf: KDF_NAME.into(),
@@ -146,9 +146,14 @@ pub fn decrypt(content: &str, password: &str) -> Result<Credentials, CoreError> 
     let cipher =
         Aes256Gcm::new_from_slice(&key).map_err(|e| CoreError::Credentials(e.to_string()))?;
     let plaintext = cipher
-        .decrypt(Nonce::from_slice(&nonce), ciphertext.as_slice())
+        .decrypt(&nonce_array(&nonce)?, ciphertext.as_slice())
         .map_err(|_| CoreError::WrongPassword)?;
     serde_json::from_slice(&plaintext).map_err(|e| CoreError::json("credentials", e))
+}
+
+fn nonce_array(bytes: &[u8]) -> Result<aead::Nonce<Aes256Gcm>, CoreError> {
+    aead::Nonce::<Aes256Gcm>::try_from(bytes)
+        .map_err(|_| CoreError::Credentials("invalid nonce".into()))
 }
 
 fn derive_key(password: &str, salt: &[u8], params: KdfParams) -> Result<[u8; 32], CoreError> {

@@ -245,7 +245,8 @@ fn download_text(url: &str) -> Result<String, CoreError> {
             url: url.to_owned(),
             message: e.to_string(),
         })?
-        .into_string()
+        .into_body()
+        .read_to_string()
         .map_err(|e| CoreError::Download {
             url: url.to_owned(),
             message: e.to_string(),
@@ -258,7 +259,8 @@ fn download_file(url: &str, target: &Path) -> Result<(), CoreError> {
         message: e.to_string(),
     })?;
     let mut file = File::create(target).map_err(|e| CoreError::io(target, e))?;
-    io::copy(&mut response.into_reader(), &mut file).map_err(|e| CoreError::io(target, e))?;
+    io::copy(&mut response.into_body().into_reader(), &mut file)
+        .map_err(|e| CoreError::io(target, e))?;
     Ok(())
 }
 
@@ -281,7 +283,7 @@ fn extract_zip(archive: &Path, target: &Path) -> Result<(), CoreError> {
     let mut zip = zip::ZipArchive::new(file)?;
     for index in 0..zip.len() {
         let mut entry = zip.by_index(index)?;
-        let name = entry.name().trim_end_matches('/').to_owned();
+        let name = entry.name()?.trim_end_matches('/').to_owned();
         let relative =
             safe_relative_path(&name).ok_or_else(|| CoreError::UnsafeEntry(name.clone()))?;
         let destination = target.join(relative);
