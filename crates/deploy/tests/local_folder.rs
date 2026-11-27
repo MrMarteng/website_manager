@@ -59,9 +59,9 @@ fn sync_respects_seed_protect_and_version_file() {
         created: "2026-11-27T08:00:00Z".into(),
     };
 
-    // Dry run changes nothing.
+    // Dry run changes nothing but lists the changes.
     let mut log = Vec::new();
-    Runner::new(rclone.clone(), true)
+    let preview = Runner::new(rclone.clone(), true)
         .run(
             &config,
             MappingMode::Sync,
@@ -72,6 +72,12 @@ fn sync_respects_seed_protect_and_version_file() {
         .unwrap();
     assert!(server.join("site/old.html").exists());
     assert!(!server.join("site/index.html").exists());
+    assert!(
+        preview.uploaded.contains(&"/site/index.html".to_owned()),
+        "{:?}",
+        preview.uploaded
+    );
+    assert_eq!(preview.deleted, vec!["/site/old.html"]);
 
     let runner = Runner::new(rclone, false);
     let summary = runner
@@ -84,6 +90,7 @@ fn sync_respects_seed_protect_and_version_file() {
         )
         .unwrap();
     assert_eq!(summary.skipped_seed, 1, "seed target already had content");
+    assert_eq!(summary.deleted, vec!["/site/old.html"]);
     assert_eq!(
         fs::read_to_string(server.join("site/index.html")).unwrap(),
         "neu"

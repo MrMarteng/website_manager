@@ -2,9 +2,11 @@
 //! publisher pinning, SHA-256 checksums, secret detection and managed runtimes.
 
 pub mod archive;
+pub mod credentials;
 pub mod error;
 pub mod hashing;
 pub mod manifest;
+pub mod projects;
 pub mod runtime;
 pub mod secrets;
 pub mod signing;

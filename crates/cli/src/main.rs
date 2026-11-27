@@ -8,6 +8,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use teleschirm_deploy::{Connection, Credential, DeployConfig, MappingMode, Runner};
+use wm_core::credentials::Credentials;
 use wm_core::signing;
 use wm_core::trust::{TrustDecision, TrustStore};
 
@@ -47,6 +48,13 @@ enum Commands {
         /// Use the existing build output instead of building.
         #[arg(long)]
         skip_build: bool,
+        /// JSON file with hoster credentials (`password` and/or `privateKey`) to ship encrypted.
+        /// The package password comes from `WM_PACKAGE_PASSWORD` or is asked for.
+        #[arg(long)]
+        credentials: Option<PathBuf>,
+        /// Do not record the server's SSH host key.
+        #[arg(long)]
+        no_host_key: bool,
     },
     /// Verify a package as the desktop app does when opening it.
     Verify {
@@ -107,13 +115,22 @@ fn run(cli: Cli) -> Result<(), String> {
             out,
             release,
             skip_build,
+            credentials,
+            no_host_key,
         } => {
+            let (credentials, package_password) = match credentials {
+                Some(path) => (Some(read_credentials(&path)?), Some(package_password()?)),
+                None => (None, None),
+            };
             let options = pack::PackOptions {
                 project,
                 key,
                 output: out,
                 release,
                 skip_build,
+                credentials,
+                package_password,
+                host_key: !no_host_key,
             };
             let report = pack::pack(&options).map_err(|e| e.to_string())?;
             println!(
@@ -152,6 +169,35 @@ fn run(cli: Cli) -> Result<(), String> {
             println!("{}", runtime.node.display());
             Ok(())
         }
+    }
+}
+
+fn read_credentials(path: &std::path::Path) -> Result<Credentials, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let credentials: Credentials =
+        serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    if credentials.is_empty() {
+        return Err(format!(
+            "{}: weder password noch privateKey",
+            path.display()
+        ));
+    }
+    Ok(credentials)
+}
+
+/// Package password from `WM_PACKAGE_PASSWORD`, otherwise asked for twice on the terminal.
+fn package_password() -> Result<String, String> {
+    if let Ok(password) = std::env::var("WM_PACKAGE_PASSWORD") {
+        return Ok(password);
+    }
+    let first = rpassword::prompt_password("Paketpasswort (mind. 8 Zeichen): ")
+        .map_err(|e| e.to_string())?;
+    let second =
+        rpassword::prompt_password("Paketpasswort wiederholen: ").map_err(|e| e.to_string())?;
+    if first == second {
+        Ok(first)
+    } else {
+        Err("Passwörter stimmen nicht überein".into())
     }
 }
 

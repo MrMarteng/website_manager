@@ -147,6 +147,42 @@ impl DeployConfig {
     }
 }
 
+impl DeployConfig {
+    /// Replaces the website root folder on the server (the shortest target) in all mappings,
+    /// e.g. `/site` → `/httpdocs` turns `/site/backend/data` into `/httpdocs/backend/data`.
+    #[must_use]
+    pub fn with_remote_root(mut self, new_root: &str) -> Self {
+        let Some(old_root) = self
+            .mappings
+            .iter()
+            .map(|mapping| mapping.target.clone())
+            .min_by_key(String::len)
+        else {
+            return self;
+        };
+        let old_root = old_root.trim_end_matches('/').to_owned();
+        let new_root = format!("/{}", new_root.trim_matches('/'));
+        let new_root = if new_root == "/" {
+            String::new()
+        } else {
+            new_root
+        };
+        for mapping in &mut self.mappings {
+            if let Some(rest) = mapping.target.strip_prefix(&old_root)
+                && (rest.is_empty() || rest.starts_with('/'))
+            {
+                let joined = format!("{new_root}{rest}");
+                mapping.target = if joined.is_empty() {
+                    "/".into()
+                } else {
+                    joined
+                };
+            }
+        }
+        self
+    }
+}
+
 #[derive(Default)]
 struct RawServer {
     protocol: Option<String>,
@@ -321,6 +357,20 @@ dist -> /site | protect=backend/data/*.json, backend/uploads/*/**
             DeployConfig::parse("user = u\n", Path::new("/p")),
             Err(DeployError::Incomplete(_))
         ));
+    }
+
+    #[test]
+    fn remote_root_is_replaced_in_all_mappings() {
+        let config = DeployConfig::parse(SAMPLE, Path::new("/p"))
+            .unwrap()
+            .with_remote_root("httpdocs/");
+        let targets: Vec<&str> = config.mappings.iter().map(|m| m.target.as_str()).collect();
+        assert_eq!(targets, vec!["/httpdocs/backend/data", "/httpdocs"]);
+        let at_top = DeployConfig::parse(SAMPLE, Path::new("/p"))
+            .unwrap()
+            .with_remote_root("/");
+        let targets: Vec<&str> = at_top.mappings.iter().map(|m| m.target.as_str()).collect();
+        assert_eq!(targets, vec!["/backend/data", "/"]);
     }
 
     #[test]

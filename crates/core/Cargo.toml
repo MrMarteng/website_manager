@@ -21,6 +21,8 @@ globset.workspace = true
 ureq.workspace = true
 flate2.workspace = true
 tar.workspace = true
+argon2.workspace = true
+aes-gcm.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -47,6 +47,10 @@ pub enum CoreError {
     Download { url: String, message: String },
     #[error("unsupported platform: {0}")]
     UnsupportedPlatform(String),
+    #[error("credentials: {0}")]
+    Credentials(String),
+    #[error("wrong package password, or the credentials were changed")]
+    WrongPassword,
     #[error("random number generator failed: {0}")]
     Random(String),
 }
