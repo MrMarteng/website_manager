@@ -168,7 +168,7 @@ fn check_entries(
     let mut seen = BTreeSet::new();
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index)?;
-        let name = entry.name().to_owned();
+        let name = entry.name()?.into_owned();
         if entry.is_dir() {
             if safe_relative_path(name.trim_end_matches('/')).is_none() {
                 return Err(CoreError::UnsafeEntry(name));
@@ -335,10 +335,12 @@ mod tests {
         let options = SimpleFileOptions::default();
         for index in 0..archive.len() {
             let mut entry = archive.by_index(index).unwrap();
-            if entry.name() == name {
+            if entry.name().unwrap() == name {
                 continue;
             }
-            writer.start_file(entry.name().to_owned(), options).unwrap();
+            writer
+                .start_file(entry.name().unwrap().into_owned(), options)
+                .unwrap();
             io::copy(&mut entry, &mut writer).unwrap();
         }
         writer.start_file(name, options).unwrap();

@@ -5,6 +5,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Dependencies updated: `zip` 9, `ureq` 3, `aes-gcm` 0.11, `ed25519-dalek` 3, `sha2` 0.11.
+  Packages and credentials files from earlier versions stay readable (regression test).
+
 ## [0.3.1] - 2026-11-27
 
 First release on GitHub; fixes from the first test on Windows.
