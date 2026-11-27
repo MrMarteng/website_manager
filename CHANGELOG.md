@@ -5,8 +5,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-27
+
+First release on GitHub; fixes from the first test on Windows.
+
 ### Added
 
+- Releases: a tag `v*` creates a draft pre-release with installers for Windows, macOS and
+  Linux, the CLI programs and `SHA256SUMS`; the release text comes from this changelog.
 - GitHub workflow: checks (formatting, Clippy, tests) on every push; installers for Windows, macOS
   and Linux on tags and on demand.
 - Guide for testing on Windows (`docs/windows-test.md`).
@@ -92,7 +98,8 @@ Feasibility state (phase 0), tested on macOS only.
 - Documentation: architecture, formats, changelog, spike report, Rust guideline with rules for
   maintaining documentation and Semantic Versioning; test for consistent version numbers.
 
-[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/MrMarteng/website_manager/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MrMarteng/website_manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MrMarteng/website_manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/MrMarteng/website_manager/releases/tag/v0.1.0
