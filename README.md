@@ -1,37 +1,36 @@
 # Website Manager
 
-Desktop-Programm, mit dem Website-Inhaber ein von ihrer Webagentur geliefertes Website-Paket
-öffnen, lokal ansehen und auf ihren eigenen Webspace hochladen – ohne technische Kenntnisse.
+A desktop app that lets website owners open a website package delivered by their web agency,
+preview it locally and upload it to their own webspace – no technical knowledge needed.
 
-*A desktop app that lets website owners open a website package delivered by their web agency,
-preview it locally and upload it to their own webspace – no technical knowledge needed.*
+> Version 0.3.0 (core workflow with rebuild and development mode). Changes: [CHANGELOG.md](CHANGELOG.md) ·
+> Architecture: [docs/architecture.md](docs/architecture.md) · Spike report: [docs/spike/phase-0.md](docs/spike/phase-0.md).
 
-> Version 0.3.0 (Kernablauf mit Bauen und Entwicklungsmodus). Änderungen: [CHANGELOG.md](CHANGELOG.md) ·
-> Architektur: [docs/architektur.md](docs/architektur.md) · Spike-Bericht: [docs/spike/phase-0.md](docs/spike/phase-0.md).
+## How it works
 
-## So funktioniert es
+1. The agency creates a signed package (`.tsweb`) with `website-manager pack`.
+2. The customer opens it in the Website Manager. Signature and checksums are verified; the first
+   package binds its publisher to the website, later packages from other publishers are rejected.
+3. **Preview:** the built website runs locally (PHP on `127.0.0.1`, sandboxed) in the browser.
+4. **Upload:** according to the rules of the shipped `deploy.conf` via SFTP/FTPS (rclone);
+   content from the editing system on the server stays untouched.
 
-1. Die Agentur erzeugt mit `website-manager pack` ein signiertes Paket (`.tsweb`).
-2. Der Kunde öffnet es im Website Manager. Signatur und Prüfsummen werden geprüft; das erste Paket
-   bindet den Absender an die Website, spätere Pakete anderer Absender werden abgelehnt.
-3. **Ansehen:** Die fertige Website läuft lokal (PHP auf `127.0.0.1`, abgeschottet) im Browser.
-4. **Hochladen:** nach den Regeln der mitgelieferten `deploy.conf` per SFTP/FTPS (rclone);
-   Inhalte aus dem Redaktionssystem auf dem Server bleiben unangetastet.
+The app's user interface is available in German and English.
 
-## Aufbau
+## Structure
 
-| Ordner | Inhalt |
+| Folder | Content |
 |---|---|
-| `crates/core` | Paketformat, Signatur (Ed25519), Prüfsummen, Absender-Bindung, Geheimnis-Prüfung, Node-Laufzeit |
-| `crates/deploy` | `teleschirm-deploy`: `deploy.conf` lesen, Upload-Plan, Ausführung mit rclone |
-| `crates/cli` | Programm `website-manager`: `keygen`, `pack`, `verify`, `deploy`, `node` |
-| `apps/desktop` | Tauri-App (Rust + Oberfläche in HTML/JS, Deutsch/Englisch) |
-| `docs/formate` | Spezifikation von `.tsweb`, Manifest, `website-manager.config.json`, `deploy.conf` |
+| `crates/core` | Package format, signatures (Ed25519), checksums, publisher binding, secret detection, projects, credentials, Node.js runtime |
+| `crates/deploy` | `teleschirm-deploy`: reads `deploy.conf`, plans and runs the upload with rclone |
+| `crates/cli` | Program `website-manager`: `keygen`, `pack`, `verify`, `deploy`, `node` |
+| `apps/desktop` | Tauri app (Rust + UI in HTML/JS, German/English) |
+| `docs/formats` | Specification of `.tsweb`, manifest, `website-manager.config.json`, `deploy.conf` |
 
-## Entwickeln
+## Development
 
-Voraussetzungen: Rust (stable), Node.js (nur für die Tauri-CLI), rclone und PHP ≥ 8.2 im `PATH`
-(bis PHP und rclone mit der App ausgeliefert werden; alternativ `WM_PHP` und `WM_RCLONE`).
+Requirements: Rust (stable), Node.js (only for the Tauri CLI), rclone and PHP ≥ 8.2 on the `PATH`
+(until PHP and rclone ship with the app; alternatively set `WM_PHP` and `WM_RCLONE`).
 
 ```bash
 cargo test --workspace
@@ -39,23 +38,23 @@ cargo clippy --workspace --all-targets -- -D warnings
 cd apps/desktop && npm install && npm run dev
 ```
 
-Installer für Windows, macOS und Linux baut der Workflow `.github/workflows/build.yml` auf GitHub
-(bei Tags `v*` oder per „Run workflow“); bei jedem Push prüft er Formatierung, Clippy und Tests.
-Test unter Windows: [docs/windows-test.md](docs/windows-test.md).
+The workflow `.github/workflows/build.yml` builds installers for Windows, macOS and Linux on
+GitHub (on tags `v*` or via "Run workflow"); on every push it checks formatting, Clippy and tests.
+Testing on Windows: [docs/windows-test.md](docs/windows-test.md).
 
-## Paket erstellen (Agentur)
+## Creating a package (agency)
 
 ```bash
-website-manager keygen --out ~/.config/website-manager/keys     # einmalig, geheimen Schlüssel sichern
+website-manager keygen --out ~/.config/website-manager/keys     # once; back up the secret key
 website-manager pack --project <website> --key ~/.config/website-manager/keys/signing.key
-# Erstauslieferung mit Zugang zum Webspace (Paketpasswort getrennt mitteilen):
-WM_PACKAGE_PASSWORD='…' website-manager pack --project <website> --key … --credentials zugang.json
-website-manager verify <paket>.tsweb
+# First delivery including webspace access (send the package password separately):
+WM_PACKAGE_PASSWORD='…' website-manager pack --project <website> --key … --credentials access.json
+website-manager verify <package>.tsweb
 ```
 
-Das Projekt braucht eine `website-manager.config.json`, siehe [docs/formate/paket.md](docs/formate/paket.md).
+The project needs a `website-manager.config.json`, see [docs/formats/package.md](docs/formats/package.md).
 
-## Lizenz
+## License
 
-Apache License 2.0, siehe [LICENSE](LICENSE). Name und Logo sind nicht lizenziert, siehe
-[TRADEMARKS.md](TRADEMARKS.md). Beiträge: [CONTRIBUTING.md](CONTRIBUTING.md).
+Apache License 2.0, see [LICENSE](LICENSE). Name and logo are not licensed, see
+[TRADEMARKS.md](TRADEMARKS.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).

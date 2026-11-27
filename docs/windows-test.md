@@ -1,101 +1,103 @@
-# Test unter Windows
+# Testing on Windows
 
-Für Windows 10 und 11 (x64). Zwei Wege zum Programm: den fertigen Installer aus GitHub Actions
-laden (empfohlen) oder selbst bauen.
+For Windows 10 and 11 (x64). Two ways to get the program: download the installer from GitHub
+Actions (recommended) or build it yourself.
 
-## 1. Programm besorgen
+## 1. Get the program
 
-### a) Installer aus GitHub Actions
+### a) Installer from GitHub Actions
 
-1. Auf GitHub: **Actions → Build → Run workflow** (oder ein Tag `v*` pushen).
-2. Nach dem Lauf im Abschnitt **Artifacts** `website-manager-Windows-<Nummer>` laden und entpacken.
-   Enthalten sind der Installer (`*.msi` oder `*-setup.exe`) und das Kommandozeilenprogramm
+1. On GitHub: **Actions → Build → Run workflow** (or push a tag `v*`).
+2. After the run, download and unpack `website-manager-Windows-<number>` from **Artifacts**. It
+   contains the installer (`*.msi` or `*-setup.exe`) and the command line program
    `website-manager.exe`.
-3. Installer starten. Die Installer sind noch nicht signiert; SmartScreen meldet „Der Computer wurde
-   durch Windows geschützt“ → **Weitere Informationen → Trotzdem ausführen**.
+3. Run the installer. The installers are not signed yet; SmartScreen reports "Windows protected
+   your PC" → **More info → Run anyway**.
 
-### b) Selbst bauen
+### b) Build it yourself
 
-Einmalig installieren:
+Install once:
 
-* [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/de/visual-cpp-build-tools/),
-  Arbeitsauslastung „Desktopentwicklung mit C++“
-* Rust über [rustup](https://rustup.rs) (`rustup-init.exe`, Standardeinstellungen)
-* [Node.js LTS](https://nodejs.org) (nur für die Tauri-CLI) und [Git](https://git-scm.com)
-* WebView2 ist in Windows 10/11 enthalten.
+* [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/),
+  workload "Desktop development with C++"
+* Rust via [rustup](https://rustup.rs) (`rustup-init.exe`, default settings)
+* [Node.js LTS](https://nodejs.org) (only for the Tauri CLI) and [Git](https://git-scm.com)
+* WebView2 is part of Windows 10/11.
 
-Dann in PowerShell:
+Then in PowerShell:
 
 ```powershell
-git clone <Repository-URL> website-manager
+git clone https://github.com/MrMarteng/website_manager.git website-manager
 cd website-manager\apps\desktop
 npm ci
-npm run dev      # Programm im Entwicklungsmodus starten
-npm run build    # Installer bauen → ..\..\target\release\bundle\msi und \nsis
+npm run dev      # start the program in development mode
+npm run build    # build the installer → ..\..\target\release\bundle\msi and \nsis
 ```
 
-Mit `npm run dev` ist die Dateiendung `.tsweb` nicht registriert; Doppelklick auf ein Paket nur mit
-installiertem Build testen.
+With `npm run dev` the `.tsweb` file extension is not registered; test double-clicking a package
+with an installed build only.
 
-## 2. PHP und rclone bereitstellen
+## 2. Provide PHP and rclone
 
-Die App liefert beide noch nicht mit.
+The app does not ship either of them yet. The app itself is in German or English; the steps below
+use the English Windows names.
 
-1. **PHP 8.2 oder neuer:** ZIP „VS17 x64 Non Thread Safe“ von
-   [windows.php.net](https://windows.php.net/download/) nach `C:\tools\php` entpacken,
-   `php.ini-production` nach `php.ini` kopieren und darin `extension_dir = "ext"`,
-   `extension=mbstring`, `extension=fileinfo` und `extension=gd` aktivieren (Semikolon am
-   Zeilenanfang entfernen; `dom` und `json` sind eingebaut).
-2. **rclone:** ZIP „Windows amd64“ von [rclone.org](https://rclone.org/downloads/) nach
-   `C:\tools\rclone` entpacken.
-3. Benutzer-Umgebungsvariablen setzen (Einstellungen → System → Info → Erweiterte
-   Systemeinstellungen → Umgebungsvariablen) und das Programm danach neu starten:
+1. **PHP 8.2 or newer:** unpack the ZIP "VS17 x64 Non Thread Safe" from
+   [windows.php.net](https://windows.php.net/download/) to `C:\tools\php`, copy
+   `php.ini-production` to `php.ini` and enable `extension_dir = "ext"`, `extension=mbstring`,
+   `extension=fileinfo` and `extension=gd` in it (remove the semicolon at the start of the line;
+   `dom` and `json` are built in).
+2. **rclone:** unpack the ZIP "Windows amd64" from [rclone.org](https://rclone.org/downloads/) to
+   `C:\tools\rclone`.
+3. Set user environment variables (Settings → System → About → Advanced system settings →
+   Environment Variables) and restart the program afterwards:
 
-   | Variable | Wert |
+   | Variable | Value |
    |---|---|
    | `WM_PHP` | `C:\tools\php\php.exe` |
    | `WM_RCLONE` | `C:\tools\rclone\rclone.exe` |
 
-Prüfen in einer neuen PowerShell: `& $env:WM_PHP -v` und `& $env:WM_RCLONE version`.
+Check in a new PowerShell: `& $env:WM_PHP -v` and `& $env:WM_RCLONE version`.
 
-## 3. Testpaket
+## 3. Test package
 
-Pakete werden auf dem Rechner der Agentur gebaut (`website-manager pack`, siehe README) und per USB-Stick,
-Netzlaufwerk oder Mail auf den Windows-Rechner gebracht. Für den Test eignen sich eine
-Erstauslieferung mit Zugangsdaten und ein Update desselben Projekts.
+Packages are built on the agency's computer (`website-manager pack`, see README) and brought to
+the Windows computer by USB stick, network drive or mail. A first delivery with credentials and an
+update of the same project are good test cases.
 
-## 4. Prüfliste
+## 4. Checklist
 
-| # | Prüfung | Erwartet |
+UI labels are given in English; in the German UI they read accordingly.
+
+| # | Check | Expected |
 |---|---|---|
-| 1 | Programm starten | Fenster erscheint, Sprache folgt Windows (Deutsch/Englisch) |
-| 2 | Paket per Knopf öffnen | Übersicht mit Version, Absender, Änderungen |
-| 3 | Paket per Ziehen ins Fenster und per Doppelklick (installierter Build) | wird geöffnet; bei laufendem Programm im selben Fenster |
-| 4 | Fremdes Paket (anderer Schlüssel, gleicher Name) | wird abgelehnt |
-| 5 | Zugang übernehmen (Paketpasswort) | in **Anmeldeinformationsverwaltung → Windows-Anmeldeinformationen** steht `com.teleschirm.website-manager` |
-| 6 | Im Browser ansehen | Website im Standardbrowser, **keine** Firewall-Abfrage; Redaktionssystem-Anmeldung lädt |
-| 7 | Vorschau beenden, Programm schließen | im Task-Manager kein `php.exe` mehr |
-| 8 | Änderungen prüfen / hochladen in einen Testordner (z. B. `C:\temp\server`) | Liste neuer und gelöschter Dateien, Dateien im Ordner, `.website-manager.json` vorhanden |
-| 9 | Update öffnen | Einstellungen und Zugang bleiben, alte Version unter „Versionen“ |
-| 10 | Version wiederherstellen und hochladen | Rückfrage wegen neuerer Version auf dem Ziel |
-| 11 | Neu bauen | lädt Node.js beim ersten Mal, meldet „Neu gebaut“; Vorschau zeigt die neue Fassung |
-| 12 | Entwicklungsmodus starten und beenden | Seite öffnet sich im Browser; danach kein `node.exe`/`php.exe` im Task-Manager |
-| 13 | Benutzername oder Ordner mit Leerzeichen/Umlauten | alles wie oben |
-| 14 | Protokoll als Datei speichern | Textdatei mit dem Ablauf |
+| 1 | Start the program | window appears, language follows Windows (German/English) |
+| 2 | Open a package with the button | overview with version, publisher, changes |
+| 3 | Open a package by drag and drop and by double-click (installed build) | opens; with the program running, in the same window |
+| 4 | Package from another publisher (other key, same name) | rejected |
+| 5 | Take over access (package password) | **Credential Manager → Windows Credentials** lists `com.teleschirm.website-manager` |
+| 6 | View in browser | website in the default browser, **no** firewall prompt; editing system login loads |
+| 7 | Stop preview, close the program | no `php.exe` left in Task Manager |
+| 8 | Check changes / upload into a test folder (for example `C:\temp\server`) | list of new and deleted files, files in the folder, `.website-manager.json` present |
+| 9 | Open an update | settings and access are kept, old version under "Versions" |
+| 10 | Restore a version and upload it | question about the newer version on the target |
+| 11 | Rebuild | downloads Node.js the first time, reports "Rebuilt"; preview shows the new build |
+| 12 | Start and stop development mode | page opens in the browser; afterwards no `node.exe`/`php.exe` in Task Manager |
+| 13 | User name or folder with spaces/umlauts | everything as above |
+| 14 | Save the log as a file | text file with the run |
 
-## 5. Wo die Daten liegen
+## 5. Where the data is
 
-| Was | Ort |
+| What | Location |
 |---|---|
-| Projekte, Versionen, `trust.json` | `%APPDATA%\com.teleschirm.website-manager\` |
-| Node.js-Cache | `%LOCALAPPDATA%\com.teleschirm.website-manager\node\` |
-| Zugang | Windows-Anmeldeinformationsverwaltung |
+| projects, versions, `trust.json` | `%APPDATA%\com.teleschirm.website-manager\` |
+| Node.js cache | `%LOCALAPPDATA%\com.teleschirm.website-manager\node\` |
+| access | Windows Credential Manager |
 
-Zum Zurücksetzen das Programm schließen, beide Ordner löschen und den Eintrag in der
-Anmeldeinformationsverwaltung entfernen.
+To reset, close the program, delete both folders and remove the entry in Credential Manager.
 
-## 6. Fehler melden
+## 6. Reporting errors
 
-Im Programm **„Für Fachleute: Protokoll“ → „Als Datei speichern …“** und die Datei mit der Nummer
-aus der Prüfliste an das Issue hängen. Bei Abstürzen zusätzlich `npm run dev` aus PowerShell
-starten und die Ausgabe des Terminals mitschicken.
+In the program, **"For experts: log" → "Save as file …"**, and attach the file with the number from
+the checklist to the issue. For crashes, also start `npm run dev` from PowerShell and send the
+terminal output.

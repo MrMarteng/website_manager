@@ -13,7 +13,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The changelog is written in English.
+- Documentation and changelog are written in English; `docs/architektur.md` is now
+  `docs/architecture.md`, `docs/formate/` is now `docs/formats/` (`paket.md` → `package.md`).
 
 ## [0.3.0] - 2026-11-27
 

@@ -1,11 +1,10 @@
-# Marken
+# Trademarks
 
-Der Quellcode steht unter der Apache License 2.0. Diese Lizenz gewährt ausdrücklich **keine**
-Rechte an Namen, Logos oder Marken (Abschnitt 6 der Lizenz).
+The source code is licensed under the Apache License 2.0. This license explicitly grants **no**
+rights to names, logos or trademarks (section 6 of the license).
 
-* „Teleschirm“ und das Teleschirm-Logo (`apps/desktop/ui/img/logo.svg`,
-  `apps/desktop/assets/icon-source.png`) sind Kennzeichen von Teleschirm Engineering.
-* Veränderte Versionen oder Forks dürfen diese Kennzeichen nicht verwenden und müssen Logo und
-  App-Symbol ersetzen. Ein Hinweis wie „basiert auf Website Manager“ ist erlaubt.
-* Pakete können ein eigenes Logo mitbringen (`logo` im Manifest); das ist von dieser Regel nicht
-  berührt.
+* "Teleschirm" and the Teleschirm logo (`apps/desktop/ui/img/logo.svg`,
+  `apps/desktop/assets/icon-source.png`) are marks of Teleschirm Engineering.
+* Modified versions or forks must not use these marks and must replace the logo and app icon. A
+  note such as "based on Website Manager" is allowed.
+* Packages may bring their own logo (`logo` in the manifest); this rule does not affect that.
