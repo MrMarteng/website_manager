@@ -7,6 +7,7 @@ Desktop-Programm, mit dem Website-Inhaber ein von ihrer Webagentur geliefertes W
 preview it locally and upload it to their own webspace – no technical knowledge needed.*
 
 > Stand: Phase 0 (Machbarkeit). Ergebnisse: [docs/spike/phase-0.md](docs/spike/phase-0.md).
+> Architektur: [docs/architektur.md](docs/architektur.md).
 
 ## So funktioniert es
 
