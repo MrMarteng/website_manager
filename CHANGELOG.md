@@ -23,6 +23,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - Rebuilding a package whose lockfile still points at a private npm registry (created before
   0.3.0) now stops with a clear message instead of a network error from npm.
+- Development mode on Windows opened a wrong address (`http://localhost:4321/` followed by a
+  colour code) and showed "404". Colour codes are now switched off (`NO_COLOR`, `FORCE_COLOR=0`)
+  and removed from tool output, so the log is plain text as well.
 
 ## [0.3.0] - 2026-11-27
 

@@ -140,10 +140,55 @@ fn command_env(runtime: &NodeRuntime) -> Vec<(String, String)> {
     vec![
         ("PATH".into(), path),
         ("ASTRO_TELEMETRY_DISABLED".into(), "1".into()),
+        // Tools may print colour codes even into a pipe (seen on Windows); the log is plain text.
+        ("NO_COLOR".into(), "1".into()),
+        ("FORCE_COLOR".into(), "0".into()),
         ("npm_config_update_notifier".into(), "false".into()),
         ("npm_config_fund".into(), "false".into()),
         ("npm_config_audit".into(), "false".into()),
     ]
+}
+
+/// Removes ANSI escape sequences (colours, cursor moves) from a line of tool output.
+#[must_use]
+pub fn strip_ansi(line: &str) -> String {
+    let mut plain = String::with_capacity(line.len());
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\u{1b}' {
+            plain.push(c);
+            continue;
+        }
+        match chars.peek() {
+            // CSI: ESC [ parameters … final byte in @..~
+            Some('[') => {
+                chars.next();
+                for code in chars.by_ref() {
+                    if ('@'..='~').contains(&code) {
+                        break;
+                    }
+                }
+            }
+            // OSC: ESC ] … terminated by BEL or ESC \
+            Some(']') => {
+                chars.next();
+                while let Some(code) = chars.next() {
+                    if code == '\u{7}' {
+                        break;
+                    }
+                    if code == '\u{1b}' && chars.peek() == Some(&'\\') {
+                        chars.next();
+                        break;
+                    }
+                }
+            }
+            Some(_) => {
+                chars.next();
+            }
+            None => {}
+        }
+    }
+    plain
 }
 
 /// Starts processes in their own group so the whole tree can be stopped.
@@ -224,7 +269,7 @@ fn run_logged(mut command: Command, log: &mut dyn FnMut(&str)) -> Result<(), Str
     }
     drop(sender);
     for line in receiver {
-        log(&line);
+        log(&strip_ansi(&line));
     }
     let status = child.wait().map_err(|e| e.to_string())?;
     if status.success() {
@@ -435,10 +480,11 @@ pub fn start_dev(
     let url = loop {
         let remaining = deadline.saturating_duration_since(Instant::now());
         // A closed channel (server ended) or the timeout both mean the start failed.
-        let Ok(line) = receiver.recv_timeout(remaining) else {
+        let Ok(raw) = receiver.recv_timeout(remaining) else {
             stop_tree(&mut child);
             return Err("code:dev-start-failed".into());
         };
+        let line = strip_ansi(&raw);
         log(&line);
         if let Some(url) = local_url(&line) {
             break url;
@@ -446,7 +492,7 @@ pub fn start_dev(
     };
     std::thread::spawn(move || {
         for line in receiver {
-            log(&line);
+            log(&strip_ansi(&line));
         }
     });
     Ok(DevServer {
@@ -522,6 +568,18 @@ mod tests {
         )
         .unwrap();
         assert!(refuse_private_packages(&lockfile).is_ok());
+    }
+
+    #[test]
+    fn colour_codes_are_removed() {
+        let line = "\u{1b}[2m┃\u{1b}[22m Local    \u{1b}[36mhttp://localhost:4321/\u{1b}[39m";
+        assert_eq!(strip_ansi(line), "┃ Local    http://localhost:4321/");
+        assert_eq!(
+            local_url(&strip_ansi(line)).as_deref(),
+            Some("http://localhost:4321/")
+        );
+        assert_eq!(strip_ansi("\u{1b}]0;title\u{7}plain"), "plain");
+        assert_eq!(strip_ansi("ohne Farben"), "ohne Farben");
     }
 
     #[test]
