@@ -6,7 +6,7 @@ Desktop-Programm, mit dem Website-Inhaber ein von ihrer Webagentur geliefertes W
 *A desktop app that lets website owners open a website package delivered by their web agency,
 preview it locally and upload it to their own webspace – no technical knowledge needed.*
 
-> Version 0.2.0 (Kernablauf). Änderungen: [CHANGELOG.md](CHANGELOG.md) ·
+> Version 0.3.0 (Kernablauf mit Bauen und Entwicklungsmodus). Änderungen: [CHANGELOG.md](CHANGELOG.md) ·
 > Architektur: [docs/architektur.md](docs/architektur.md) · Spike-Bericht: [docs/spike/phase-0.md](docs/spike/phase-0.md).
 
 ## So funktioniert es

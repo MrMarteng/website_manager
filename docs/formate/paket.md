@@ -7,7 +7,7 @@ Ein Paket ist ein ZIP-Archiv:
 | `manifest.json` | ja | Beschreibung und Prüfsummen (unten) |
 | `manifest.sig` | ja | Zeile 1: öffentlicher Ed25519-Schlüssel (Base64), Zeile 2: Signatur der exakten Bytes von `manifest.json` (Base64) |
 | `dist/…` | ja | fertig gebaute Website; wird angezeigt und hochgeladen |
-| `project/…` | nein | Quellen zum Neubauen und für den Dev-Modus |
+| `project/…` | nein | Quellen zum Neubauen und für den Dev-Modus; `project/vendor/*.tgz` enthält Pakete aus privaten npm-Registries |
 | `deploy.conf` | nein | Upload-Regeln ([deploy-conf.md](deploy-conf.md)), ohne Pfade des Absender-Rechners |
 | `known_hosts` | nein | SSH-Host-Schlüssel des Servers im OpenSSH-Format; die `deploy.conf` verweist mit `known_hosts_file = known_hosts` darauf |
 | `credentials.enc` | nein | verschlüsselte Zugangsdaten (unten); nur bei der Erstauslieferung |
@@ -33,6 +33,7 @@ Ein Paket ist ein ZIP-Archiv:
   "version": "2026.11.27",
   "created": "2026-11-27T08:00:00Z",
   "node_version": "22.12.0",
+  "build_output": "dist",
   "changelog": ["Öffnungszeiten ergänzt"],
   "logo": "project/public/logo.svg",
   "has_credentials": false,
@@ -83,5 +84,12 @@ mindestens 8 Zeichen. Der Export aus der App (`<name>.wmzugang`) hat dasselbe Fo
 * Aus der `deploy.conf` werden `key_file` und `known_hosts_file` entfernt. Bei SFTP liest `pack`
   die Host-Schlüssel des Servers mit `ssh-keyscan` und legt sie als `known_hosts` bei
   (abschaltbar mit `--no-host-key`).
+* Stammt ein Paket im `package-lock.json` nicht von `registry.npmjs.org`, holt `pack` es mit
+  `npm pack` (mit der npm-Konfiguration der Agentur) nach `project/vendor/` und setzt `resolved` auf
+  `file:vendor/<datei>.tgz`; `integrity` bleibt.
+* Für tscms-Projekte gehört `backend/**` einschließlich `backend/vendor/` in `include`, sonst
+  läuft das Backend nach dem Neubauen nicht.
+* `build_output` (aus `dist` der Konfiguration) nennt den Ausgabeordner relativ zu `project/`;
+  `node_version` sollte eine genaue Version sein (`22.12.0`).
 * `--credentials <datei.json>` legt Zugangsdaten verschlüsselt bei; das Paketpasswort kommt aus
   `WM_PACKAGE_PASSWORD` oder wird abgefragt.

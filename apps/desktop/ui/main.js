@@ -152,6 +152,7 @@ function renderProject() {
   show("changelog-box", p.current.changelog.length > 0);
   show("compliance-open", p.hasCompliance);
   show("credentials-card", p.packageHasCredentials && !p.storedCredentials);
+  show("build-card", p.canBuild);
 
   // Upload
   const detected = p.detected;
@@ -228,9 +229,18 @@ function setPreviewRunning(url) {
   $("preview-url").textContent = url || "";
 }
 
+function setDevRunning(url) {
+  show("dev-start", !url);
+  show("dev-stop", Boolean(url));
+  $("dev-url").textContent = url || "";
+}
+
 function startPreviewTimer() {
   stopPreviewTimer();
-  previewTimer = setInterval(async () => setPreviewRunning(await invoke("preview_status")), 3000);
+  previewTimer = setInterval(async () => {
+    setPreviewRunning(await invoke("preview_status"));
+    setDevRunning(await invoke("dev_status"));
+  }, 3000);
 }
 
 function stopPreviewTimer() {
@@ -446,6 +456,28 @@ function init() {
     setPreviewRunning(null);
   });
 
+  $("build-run").addEventListener("click", async (event) => {
+    $("build-line").textContent = text("working");
+    const overview = await busy(event.target, () => invoke("build_site", { name: project.name }));
+    if (overview) {
+      project = overview;
+      renderProject();
+      $("build-line").textContent = text("buildDone");
+    } else {
+      $("build-line").textContent = "";
+    }
+  });
+  $("dev-start").addEventListener("click", async (event) => {
+    $("build-line").textContent = text("working");
+    const url = await busy(event.target, () => invoke("start_dev", { name: project.name }));
+    $("build-line").textContent = "";
+    if (url) setDevRunning(url);
+  });
+  $("dev-stop").addEventListener("click", async (event) => {
+    await busy(event.target, () => invoke("stop_dev"));
+    setDevRunning(null);
+  });
+
   for (const radio of document.querySelectorAll("input[name=target]")) {
     radio.addEventListener("change", updateTargetFields);
   }
@@ -498,6 +530,9 @@ function init() {
     $("upload-line").textContent = String(event.payload).trim();
   });
   listen("package-open-requested", openPending);
+  listen("build-progress", (event) => {
+    $("build-line").textContent = String(event.payload).trim();
+  });
 
   showStart();
   openPending();

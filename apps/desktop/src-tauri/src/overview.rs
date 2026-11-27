@@ -11,7 +11,6 @@ use wm_core::signing::fingerprint;
 use wm_core::trust::TrustStore;
 
 use crate::deployment::effective_config;
-use crate::keychain;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +62,8 @@ pub struct Overview {
     pub package_has_credentials: bool,
     pub has_compliance: bool,
     pub has_sources: bool,
+    /// Sources with a `package.json` are present, so the site can be rebuilt.
+    pub can_build: bool,
 }
 
 fn version_info(manifest: &Manifest, id: &str, current: &str) -> VersionInfo {
@@ -153,10 +154,11 @@ pub fn build(store: &ProjectStore, trust_file: &Path, name: &str) -> Result<Over
         settings: record.settings.clone(),
         detected,
         deploy_error,
-        stored_credentials: keychain::has(name),
+        stored_credentials: record.credentials_stored,
         package_has_credentials: manifest.has_credentials
             && folder.join(CREDENTIALS_FILE).is_file(),
         has_compliance: has_prefix("compliance/"),
         has_sources: has_prefix("project/"),
+        can_build: folder.join("project/package.json").is_file(),
     })
 }

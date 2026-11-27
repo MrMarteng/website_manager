@@ -13,7 +13,7 @@ use wm_core::projects::{ProjectSettings, ProjectStore};
 use crate::deployment::{self, UploadRequest, UploadResult};
 use crate::files::{self, FileEntry};
 use crate::overview::{self, Overview};
-use crate::{AppState, UPLOAD_EVENT, keychain, preview};
+use crate::{AppState, BUILD_EVENT, UPLOAD_EVENT, keychain, preview, site};
 
 /// File extension of exported credentials.
 const CREDENTIALS_EXPORT_EXTENSION: &str = "wmzugang";
@@ -41,6 +41,17 @@ fn current_folder(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
 
 fn overview_of(app: &AppHandle, name: &str) -> Result<Overview, String> {
     overview::build(&store(app)?, &trust_file(app)?, name)
+}
+
+/// Records in `project.json` whether credentials are in the keychain.
+fn mark_credentials(app: &AppHandle, name: &str, stored: bool) -> Result<(), String> {
+    let store = store(app)?;
+    let mut record = store.load(name).map_err(|e| e.to_string())?;
+    if record.credentials_stored != stored {
+        record.credentials_stored = stored;
+        store.save(&record).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 fn decrypt_error(error: wm_core::CoreError) -> String {
@@ -179,6 +190,7 @@ pub async fn import_package_credentials(
     let content = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
     let decrypted = credentials::decrypt(&content, &password).map_err(decrypt_error)?;
     keychain::store(&name, &decrypted)?;
+    mark_credentials(&app, &name, true)?;
     state.log(format!("credentials for {name} stored in the keychain"));
     overview_of(&app, &name)
 }
@@ -190,6 +202,7 @@ pub fn forget_credentials(
     name: String,
 ) -> Result<Overview, String> {
     keychain::delete(&name)?;
+    mark_credentials(&app, &name, false)?;
     state.log(format!("credentials for {name} removed from the keychain"));
     overview_of(&app, &name)
 }
@@ -235,6 +248,7 @@ pub async fn import_credentials_file(
     let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let decrypted = credentials::decrypt(&content, &password).map_err(decrypt_error)?;
     keychain::store(&name, &decrypted)?;
+    mark_credentials(&app, &name, true)?;
     overview_of(&app, &name).map(Some)
 }
 
@@ -314,6 +328,13 @@ pub async fn upload(
         "upload {name} {} (dry run: {})",
         record.current, request.dry_run
     ));
+    let used_password = match &request.target {
+        deployment::UploadTarget::Server { password } => {
+            password.as_deref().is_some_and(|p| !p.is_empty())
+        }
+        deployment::UploadTarget::LocalFolder { .. } => true,
+    };
+    let project_name = name.clone();
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -324,8 +345,11 @@ pub async fn upload(
     })
     .await
     .map_err(|e| e.to_string())?;
-    if let Err(error) = &result {
-        state.log(format!("upload failed: {error}"));
+    match &result {
+        // Projects from before the marker existed: the upload just used stored credentials.
+        Ok(_) if !used_password => mark_credentials(&app, &project_name, true)?,
+        Ok(_) => {}
+        Err(error) => state.log(format!("upload failed: {error}")),
     }
     result
 }
@@ -441,6 +465,163 @@ pub async fn export_log(app: AppHandle, state: State<'_, AppState>) -> Result<bo
     Ok(true)
 }
 
+/// Managed Node.js for the current version (downloaded on first use).
+fn node_for(
+    app: &AppHandle,
+    name: &str,
+) -> Result<
+    (
+        PathBuf,
+        wm_core::manifest::Manifest,
+        wm_core::runtime::node::NodeRuntime,
+    ),
+    String,
+> {
+    let store = store(app)?;
+    let record = store.load(name).map_err(|e| e.to_string())?;
+    let manifest = store
+        .manifest(name, &record.current)
+        .map_err(|e| e.to_string())?;
+    let version = manifest
+        .node_version
+        .clone()
+        .unwrap_or_else(|| site::DEFAULT_NODE_VERSION.to_owned());
+    let runtime =
+        wm_core::runtime::node::ensure(&version, &node_cache(app)?).map_err(|e| e.to_string())?;
+    Ok((store.version_dir(name, &record.current), manifest, runtime))
+}
+
+fn node_cache(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("node"))
+}
+
+/// Removes Node.js versions no project needs any more.
+fn prune_node_cache(app: &AppHandle, state: &AppState) {
+    let Ok(store) = store(app) else { return };
+    let keep: Vec<String> = store
+        .list()
+        .iter()
+        .filter_map(|name| {
+            let record = store.load(name).ok()?;
+            let manifest = store.manifest(name, &record.current).ok()?;
+            Some(
+                manifest
+                    .node_version
+                    .unwrap_or_else(|| site::DEFAULT_NODE_VERSION.to_owned()),
+            )
+        })
+        .collect();
+    if let Ok(cache) = node_cache(app) {
+        match wm_core::runtime::node::prune(&cache, &keep) {
+            Ok(removed) => {
+                for folder in removed {
+                    state.log(format!("unused Node.js removed: {}", folder.display()));
+                }
+            }
+            Err(error) => state.log(format!("Node.js cache not cleaned: {error}")),
+        }
+    }
+}
+
+/// Rebuilds the current version from its sources; output lines arrive as events.
+#[tauri::command]
+pub async fn build_site(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<Overview, String> {
+    state.log(format!("build {name}"));
+    let log = std::sync::Arc::clone(&state.log);
+    let emitter = app.clone();
+    let worker_app = app.clone();
+    let project = name.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut emit = |line: &str| {
+            crate::push_log(&log, line);
+            let _ = emitter.emit(BUILD_EVENT, line);
+        };
+        emit("preparing Node.js …");
+        let (folder, manifest, runtime) = node_for(&worker_app, &project)?;
+        let output = manifest.build_output.as_deref().unwrap_or("dist");
+        site::build(&folder, output, &runtime, &mut emit)
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    if let Err(error) = &result {
+        state.log(format!("build failed: {error}"));
+    }
+    result?;
+    prune_node_cache(&app, &state);
+    overview_of(&app, &name)
+}
+
+/// Starts the development server of the current version and opens it in the browser.
+#[tauri::command]
+pub async fn start_dev(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<String, String> {
+    stop_dev_server(&state);
+    let log = std::sync::Arc::clone(&state.log);
+    let emitter = app.clone();
+    let worker_app = app.clone();
+    let project = name.clone();
+    let server = tauri::async_runtime::spawn_blocking(move || {
+        let emit = move |line: &str| {
+            crate::push_log(&log, line);
+            let _ = emitter.emit(BUILD_EVENT, line);
+        };
+        emit("preparing Node.js …");
+        let (folder, _, runtime) = node_for(&worker_app, &project)?;
+        site::start_dev(&folder, &project, &runtime, emit)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let url = server.url.clone();
+    state.log(format!("development server running at {url}"));
+    if let Ok(mut slot) = state.dev.lock() {
+        *slot = Some(server);
+    }
+    app.opener()
+        .open_url(&url, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    Ok(url)
+}
+
+#[tauri::command]
+pub fn stop_dev(state: State<'_, AppState>) {
+    stop_dev_server(&state);
+}
+
+/// URL of the running development server, if any.
+#[tauri::command]
+pub fn dev_status(state: State<'_, AppState>) -> Option<String> {
+    let mut slot = state.dev.lock().ok()?;
+    let running = slot.as_mut()?;
+    if running.is_running() {
+        Some(running.url.clone())
+    } else {
+        if let Some(stopped) = slot.take() {
+            stopped.stop();
+        }
+        None
+    }
+}
+
+fn stop_dev_server(state: &AppState) {
+    if let Ok(mut slot) = state.dev.lock()
+        && let Some(server) = slot.take()
+    {
+        state.log(format!("development server stopped ({})", server.project));
+        server.stop();
+    }
+}
+
 fn stop_current(state: &AppState) {
     if let Ok(mut slot) = state.preview.lock()
         && let Some(running) = slot.take()
@@ -454,5 +635,6 @@ fn stop_current(state: &AppState) {
 pub fn shutdown(app: &AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
         stop_current(&state);
+        stop_dev_server(&state);
     }
 }

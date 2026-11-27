@@ -5,6 +5,27 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-27
+
+Bauen und Entwicklungsmodus beim Kunden (Phase 1b), getestet nur unter macOS.
+
+### Added
+
+- „Neu bauen“ und Entwicklungsmodus in der App: Node.js der Paketversion wird geladen und geprüft,
+  Abhängigkeiten mit `npm ci --ignore-scripts`, npm-Skripte laufen ohne Shell (auch unter Windows);
+  der neue Build ersetzt die Website der Version, der vorherige bleibt erhalten. Der
+  Entwicklungsmodus öffnet sich im Browser und wird mit allen Unterprozessen beendet.
+- `pack` liefert Pakete aus privaten npm-Registries als Tarball mit (`project/vendor/`).
+- Manifest: optionales Feld `build_output`.
+- Nicht mehr benötigte Node.js-Versionen werden aus dem Cache entfernt.
+
+### Fixed
+
+- Der Schlüsselbund wird nur noch beim Upload gelesen und höchstens einmal je Projekt und
+  Sitzung; ob ein Zugang gespeichert ist, steht in `project.json`. Vorher fragte macOS bei jedem
+  Aktualisieren der Ansicht (z. B. nach „Neu bauen“) erneut nach dem Passwort.
+- Beim Beenden des Entwicklungsmodus erscheint keine Meldung „No such process“ mehr.
+
 ## [0.2.0] - 2026-11-27
 
 Kernablauf (Phase 1a), getestet nur unter macOS.
@@ -50,6 +71,7 @@ Machbarkeitsstand (Phase 0), getestet nur unter macOS.
 - Dokumentation: Architektur, Formate, Changelog, Spike-Bericht, Rust-Guideline mit Regeln für
   Doku-Pflege und Semantic Versioning; Test für einheitliche Versionsnummern.
 
-[Unreleased]: https://git.nas.local/teleschirm/website-manager/compare/v0.2.0...HEAD
+[Unreleased]: https://git.nas.local/teleschirm/website-manager/compare/v0.3.0...HEAD
+[0.3.0]: https://git.nas.local/teleschirm/website-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://git.nas.local/teleschirm/website-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://git.nas.local/teleschirm/website-manager/src/tag/v0.1.0

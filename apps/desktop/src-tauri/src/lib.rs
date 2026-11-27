@@ -7,6 +7,7 @@ mod files;
 mod keychain;
 mod overview;
 mod preview;
+mod site;
 mod tools;
 
 use std::path::PathBuf;
@@ -18,11 +19,14 @@ use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
 pub const OPEN_EVENT: &str = "package-open-requested";
 /// Event with one line of upload output.
 pub const UPLOAD_EVENT: &str = "upload-progress";
+/// Event with one line of build or development server output.
+pub const BUILD_EVENT: &str = "build-progress";
 
 /// Shared state of the running app.
 #[derive(Default)]
 pub struct AppState {
     pub preview: Mutex<Option<preview::Preview>>,
+    pub dev: Mutex<Option<site::DevServer>>,
     pub log: Arc<Mutex<Vec<String>>>,
     /// Packages handed over before the window asked for them.
     pub pending_open: Mutex<Vec<PathBuf>>,
@@ -101,6 +105,10 @@ pub fn run() {
             commands::stop_preview,
             commands::preview_status,
             commands::upload,
+            commands::build_site,
+            commands::start_dev,
+            commands::stop_dev,
+            commands::dev_status,
             commands::restore_version,
             commands::remove_version,
             commands::list_files,

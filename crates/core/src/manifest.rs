@@ -18,6 +18,9 @@ pub struct Manifest {
     /// Node.js version needed to build or run the development server.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_version: Option<String>,
+    /// Folder the project's build writes to, relative to `project/` (default `dist`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_output: Option<String>,
     /// Human-readable list of changes in this delivery.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changelog: Vec<String>,
@@ -65,6 +68,7 @@ mod tests {
             version: "1.0.0".into(),
             created: "2026-11-27T08:00:00Z".into(),
             node_version: Some("22.12.0".into()),
+            build_output: None,
             changelog: vec!["Erste Auslieferung".into()],
             logo: None,
             has_credentials: false,
