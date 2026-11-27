@@ -29,7 +29,7 @@ flate2 = "1"
 tar = "0.4"
 tempfile = "3"
 argon2 = "0.5"
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 rpassword = "7"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 trash = "5"
