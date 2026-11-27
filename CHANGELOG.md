@@ -5,10 +5,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-27
+
 ### Changed
 
 - Dependencies updated: `zip` 9, `ureq` 3, `aes-gcm` 0.11, `ed25519-dalek` 3, `sha2` 0.11.
   Packages and credentials files from earlier versions stay readable (regression test).
+
+### Fixed
+
+- Development mode on Windows opened a wrong address (`http://localhost:4321/` followed by a
+  colour code) and showed "404". Colour codes are now switched off (`NO_COLOR`, `FORCE_COLOR=0`)
+  and removed from tool output, so the log is plain text as well.
 
 ## [0.3.1] - 2026-11-27
 
@@ -36,9 +44,6 @@ First release on GitHub; fixes from the first test on Windows.
 
 - Rebuilding a package whose lockfile still points at a private npm registry (created before
   0.3.0) now stops with a clear message instead of a network error from npm.
-- Development mode on Windows opened a wrong address (`http://localhost:4321/` followed by a
-  colour code) and showed "404". Colour codes are now switched off (`NO_COLOR`, `FORCE_COLOR=0`)
-  and removed from tool output, so the log is plain text as well.
 
 ## [0.3.0] - 2026-11-27
 
@@ -106,7 +111,8 @@ Feasibility state (phase 0), tested on macOS only.
 - Documentation: architecture, formats, changelog, spike report, Rust guideline with rules for
   maintaining documentation and Semantic Versioning; test for consistent version numbers.
 
-[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/MrMarteng/website_manager/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MrMarteng/website_manager/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MrMarteng/website_manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/MrMarteng/website_manager/compare/v0.1.0...v0.2.0
