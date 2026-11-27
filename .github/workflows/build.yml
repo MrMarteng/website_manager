@@ -1,5 +1,7 @@
 # Checks every push and pull request; builds installers for Windows, macOS and Linux on tags
-# (v*) and on demand (Actions → "Build" → "Run workflow"). Installers are unsigned (phase 3).
+# (v*) and on demand (Actions → "Build" → "Run workflow"). A tag v* also creates a draft
+# pre-release with all installers and SHA256SUMS, to be published by hand. Installers are
+# unsigned (phase 3).
 name: Build
 
 on:
@@ -34,6 +36,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
+      - name: Release tag matches versions and changelog
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python3 .github/scripts/release.py check "${{ github.ref_name }}"
 
       - uses: Swatinem/rust-cache@v2
 
@@ -98,3 +104,33 @@ jobs:
             target/release/bundle/deb/*.deb
             target/release/website-manager
             target/release/website-manager.exe
+
+  release:
+    name: Draft release
+    needs: bundle
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: website-manager-*
+          path: artifacts
+
+      - name: Collect installers and checksums
+        run: python3 .github/scripts/release.py collect "${{ github.ref_name }}" artifacts release
+
+      - name: Release notes from the changelog
+        run: python3 .github/scripts/release.py notes "${{ github.ref_name }}" release-notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Website Manager ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: true
+          prerelease: true
+          fail_on_unmatched_files: true
+          files: release/*

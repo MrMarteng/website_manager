@@ -3,8 +3,14 @@
 A desktop app that lets website owners open a website package delivered by their web agency,
 preview it locally and upload it to their own webspace – no technical knowledge needed.
 
-> Version 0.3.0 (core workflow with rebuild and development mode). Changes: [CHANGELOG.md](CHANGELOG.md) ·
+> Version 0.3.1 (core workflow with rebuild and development mode). Changes: [CHANGELOG.md](CHANGELOG.md) ·
 > Architecture: [docs/architecture.md](docs/architecture.md) · Spike report: [docs/spike/phase-0.md](docs/spike/phase-0.md).
+
+## Download
+
+Installers for Windows, macOS and Linux are attached to the
+[releases](https://github.com/MrMarteng/website_manager/releases). They are not signed yet; see the
+notes in each release. Verify downloads with `SHA256SUMS`.
 
 ## How it works
 
