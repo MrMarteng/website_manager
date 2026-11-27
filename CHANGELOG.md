@@ -5,6 +5,12 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added
+
+- GitHub-Workflow: Prüfung (Formatierung, Clippy, Tests) bei jedem Push, Installer für Windows,
+  macOS und Linux bei Tags und auf Anforderung.
+- Anleitung für den Test unter Windows (`docs/windows-test.md`).
+
 ## [0.3.0] - 2026-11-27
 
 Bauen und Entwicklungsmodus beim Kunden (Phase 1b), getestet nur unter macOS.

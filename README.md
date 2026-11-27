@@ -39,6 +39,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cd apps/desktop && npm install && npm run dev
 ```
 
+Installer für Windows, macOS und Linux baut der Workflow `.github/workflows/build.yml` auf GitHub
+(bei Tags `v*` oder per „Run workflow“); bei jedem Push prüft er Formatierung, Clippy und Tests.
+Test unter Windows: [docs/windows-test.md](docs/windows-test.md).
+
 ## Paket erstellen (Agentur)
 
 ```bash

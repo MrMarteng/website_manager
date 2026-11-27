@@ -6,7 +6,8 @@
 * Neues Verhalten braucht einen Test. Dokumentation und Changelog ändern sich im selben Commit
   (Abschnitt unten).
 * Vor dem Push: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`.
+  `cargo test --workspace`. Dieselben Schritte laufen in der CI (`.github/workflows/build.yml`);
+  Installer entstehen dort bei Tags `v*` und auf Anforderung.
 
 ## Dokumentation, Changelog, Version
 
