@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - GitHub workflow: checks (formatting, Clippy, tests) on every push; installers for Windows, macOS
   and Linux on tags and on demand.
 - Guide for testing on Windows (`docs/windows-test.md`).
+- Security policy (private vulnerability reporting), code of conduct, issue and pull request
+  templates, code owners and weekly Dependabot updates.
 
 ### Changed
 

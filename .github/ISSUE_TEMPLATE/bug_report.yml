@@ -1,0 +1,35 @@
+name: Bug report
+description: Something does not work as described.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "0.3.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [Windows, macOS, Linux]
+      multiple: true
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: 'In the app: "For experts: log" → "Save as file …". Remove passwords and host names you do not want to share.'
+      render: text
+  - type: markdown
+    attributes:
+      value: "Security problems: please do not report them here, see [SECURITY.md](../blob/main/SECURITY.md)."

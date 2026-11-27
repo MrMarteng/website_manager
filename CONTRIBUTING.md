@@ -2,7 +2,15 @@
 
 ## Workflow
 
-* Changes go on a branch; commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
+* Discuss larger changes in an issue first. Security problems: see [SECURITY.md](SECURITY.md), not
+  an issue. Everyone follows the [code of conduct](CODE_OF_CONDUCT.md).
+* Changes go on a branch (in a fork if you are not a maintainer) and reach `main` only through a
+  pull request. `main` requires the check "Format, Clippy, Tests" and an approving review by a code
+  owner (`.github/CODEOWNERS`); pull requests are squash-merged, so the **pull request title** must
+  follow [Conventional Commits](https://www.conventionalcommits.org/) (it becomes the commit
+  message). Workflows of first-time and outside contributors run after a maintainer approves them.
+* Release tags `v*` can only be created by maintainers.
+* Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 * New behaviour needs a test. Documentation and changelog change in the same commit (see below).
 * Before pushing: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo test --workspace`. The same steps run in CI (`.github/workflows/build.yml`); installers
