@@ -5,6 +5,10 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-27
+
+Kernablauf (Phase 1a), getestet nur unter macOS.
+
 ### Added
 
 - Projekte mit Versionen: Ein Update ersetzt die aktuelle Version, die letzten fünf bleiben
@@ -46,5 +50,6 @@ Machbarkeitsstand (Phase 0), getestet nur unter macOS.
 - Dokumentation: Architektur, Formate, Changelog, Spike-Bericht, Rust-Guideline mit Regeln für
   Doku-Pflege und Semantic Versioning; Test für einheitliche Versionsnummern.
 
-[Unreleased]: https://git.nas.local/teleschirm/website-manager/compare/v0.1.0...HEAD
+[Unreleased]: https://git.nas.local/teleschirm/website-manager/compare/v0.2.0...HEAD
+[0.2.0]: https://git.nas.local/teleschirm/website-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://git.nas.local/teleschirm/website-manager/src/tag/v0.1.0
