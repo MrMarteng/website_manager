@@ -11,13 +11,17 @@
 
 ## Dokumentation, Changelog, Version
 
+**Sprache:** `CHANGELOG.md`, Code-Kommentare (`//`, `///`, `//!`, Kommentare in JS, CSS, PHP, YAML)
+und Commit-Nachrichten sind englisch. Texte der Oberfläche stehen in `apps/desktop/ui/i18n.js`
+(Deutsch und Englisch); die Doku unter `docs/` ist deutsch.
+
 Gehören zur Änderung und kommen in denselben Commit wie der Code.
 
 * **`docs/architektur.md`** beschreibt nur den Ist-Zustand. Ändert sich ein Baustein, Ablauf,
   Sicherheitsmerkmal, Ablageort oder eine Entscheidung, wird der Abschnitt angepasst. Geplantes
   gehört nicht hinein.
 * **`docs/formate/*.md`** sind die Spezifikation; Code und Spezifikation ändern sich gemeinsam.
-* **`CHANGELOG.md`** ([Keep a Changelog](https://keepachangelog.com/de/1.1.0/)): jede für Nutzer
+* **`CHANGELOG.md`** ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/), englisch): jede für Nutzer
   oder Agentur sichtbare Änderung unter `[Unreleased]` in der passenden Rubrik (`Added`,
   `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`). Interne Umbauten ohne Wirkung nach
   außen brauchen keinen Eintrag.
