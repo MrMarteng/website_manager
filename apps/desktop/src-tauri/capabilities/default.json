@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The window may only call the app's own commands. Files, dialogs, processes and the browser are handled in Rust.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

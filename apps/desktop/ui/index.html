@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Website Manager</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <img src="img/logo.svg" alt="" class="logo" id="logo">
+    <h1 data-i18n="appTitle">Website Manager</h1>
+    <select id="language" aria-label="Sprache / Language">
+      <option value="de">Deutsch</option>
+      <option value="en">English</option>
+    </select>
+  </header>
+
+  <main>
+    <section class="card" id="open-card">
+      <h2 data-i18n="openTitle"></h2>
+      <p class="muted" data-i18n="openHint"></p>
+      <button class="primary" id="open-button" data-i18n="openButton"></button>
+    </section>
+
+    <section class="card hidden" id="package-card">
+      <h2 id="package-title"></h2>
+      <dl class="facts">
+        <dt data-i18n="version"></dt><dd id="package-version"></dd>
+        <dt data-i18n="created"></dt><dd id="package-created"></dd>
+        <dt data-i18n="publisher"></dt><dd id="package-publisher"></dd>
+      </dl>
+      <p class="notice hidden" id="first-use" data-i18n="firstUse"></p>
+      <div id="changelog-box" class="hidden">
+        <h3 data-i18n="changes"></h3>
+        <ul id="changelog"></ul>
+      </div>
+    </section>
+
+    <section class="card hidden" id="preview-card">
+      <h2 data-i18n="previewTitle"></h2>
+      <p class="muted" data-i18n="previewHint"></p>
+      <div class="row">
+        <button class="primary" id="preview-start" data-i18n="previewStart"></button>
+        <button id="preview-stop" class="hidden" data-i18n="previewStop"></button>
+        <span id="preview-url" class="muted"></span>
+      </div>
+    </section>
+
+    <section class="card hidden" id="upload-card">
+      <h2 data-i18n="uploadTitle"></h2>
+      <fieldset>
+        <label><input type="radio" name="target" value="server" checked> <span data-i18n="targetServer"></span></label>
+        <label><input type="radio" name="target" value="local"> <span data-i18n="targetLocal"></span></label>
+      </fieldset>
+      <label class="field" id="password-field">
+        <span data-i18n="password"></span>
+        <input type="password" id="password" autocomplete="off">
+      </label>
+      <label class="field hidden" id="folder-field">
+        <span data-i18n="localFolder"></span>
+        <input type="text" id="local-folder" placeholder="/tmp/website-test">
+      </label>
+      <div class="row">
+        <button id="upload-check" data-i18n="uploadCheck"></button>
+        <button class="primary" id="upload-run" data-i18n="uploadRun"></button>
+      </div>
+      <p id="upload-result" class="result" role="status"></p>
+    </section>
+
+    <details class="card" id="expert">
+      <summary data-i18n="expertTitle"></summary>
+      <div class="row">
+        <button id="log-refresh" data-i18n="logRefresh"></button>
+        <button id="log-export" data-i18n="logExport"></button>
+      </div>
+      <pre id="log"></pre>
+    </details>
+
+    <p id="error" class="error hidden" role="alert"></p>
+  </main>
+
+  <script src="i18n.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+[package]
+name = "website-manager-cli"
+description = "Command line for creating, verifying and uploading Website Manager packages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "website-manager"
+path = "src/main.rs"
+
+[dependencies]
+wm-core.workspace = true
+teleschirm-deploy.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+walkdir.workspace = true
+globset.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
