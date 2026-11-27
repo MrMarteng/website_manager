@@ -108,9 +108,12 @@ uploaded nor deleted), every line as an event to the window → finally write `.
 "Upload now" always runs a dry run (`--dry-run`) first and asks with the number of new and deleted
 files.
 
-**Rebuild:** download and verify the Node.js version named in the manifest (otherwise 22.12.0) →
-in `project/` run `npm ci --ignore-scripts` if `node_modules` is missing or older than the
-lockfile → run the `build` script from `package.json` without a shell (`KEY=value program args`;
+**Rebuild:** resolve the Node.js version named in the manifest (exact like `22.23.5`, a major
+version like `22` or `lts`; without one the newest LTS) – major versions and `lts` resolve to the
+newest matching release on nodejs.org, offline to the newest matching cached release – then
+download and verify it → refuse with a clear message if the lockfile still points at a private
+registry → in `project/` run `npm ci --ignore-scripts` if `node_modules` is missing or older than
+the lockfile → run the `build` script from `package.json` without a shell (`KEY=value program args`;
 `program` is resolved through the package's `bin` field to its JavaScript file and started with
 the downloaded Node.js) → the output (`build_output`, default `dist`) replaces the version's
 `dist/`, the previous `dist/` is kept in `.runtime/dist-before-build/` → Node.js versions no longer

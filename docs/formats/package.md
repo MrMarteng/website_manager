@@ -32,7 +32,7 @@ A package is a ZIP archive:
   "name": "cafe-glueckseelig",
   "version": "2026.11.27",
   "created": "2026-11-27T08:00:00Z",
-  "node_version": "22.12.0",
+  "node_version": "22",
   "build_output": "dist",
   "changelog": ["Opening hours added"],
   "logo": "project/public/logo.svg",
@@ -69,7 +69,7 @@ format.
   "build": ["npm", "run", "build"],
   "dist": "dist",
   "deploy_conf": "deploy.conf",
-  "node_version": "22.12.0",
+  "node_version": "22",
   "include": ["src/**", "public/**", "backend/**", "package.json", "package-lock.json", "astro.config.mjs"],
   "exclude": [],
   "changelog": ["Opening hours added"],
@@ -91,6 +91,8 @@ format.
 * For tscms projects, `include` must contain `backend/**` including `backend/vendor/`; otherwise
   the backend does not work after a rebuild.
 * `build_output` (from `dist` in the configuration) names the output folder relative to
-  `project/`; `node_version` should be an exact version (`22.12.0`).
+  `project/`; `node_version` is an exact version (`22.23.5`), a major version (`22`, resolved to
+  the newest 22.x release) or `lts`. A major version is recommended: dependencies often need a
+  recent minor release.
 * `--credentials <file.json>` adds encrypted credentials; the package password comes from
   `WM_PACKAGE_PASSWORD` or is asked for.

@@ -1,6 +1,8 @@
-//! Managed runtimes (Node.js) that the Website Manager downloads and caches per version.
+//! Managed runtimes (Node.js) that the Website Manager downloads and caches per version, and
+//! npm lockfile helpers.
 
 pub mod node;
+pub mod npm;
 
 /// Operating system and CPU architecture in the naming of the Node.js downloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
