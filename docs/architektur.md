@@ -59,16 +59,17 @@ Abhängigkeiten zeigen nur nach unten; `core` und `deploy` kennen sich nicht.
 
 | Baustein | Verantwortung | Wichtige Module |
 |---|---|---|
-| `wm-core` | Paketformat und Vertrauen | `archive` (schreiben, prüfen, entpacken), `manifest`, `signing` (Ed25519), `trust` (Absender-Bindung), `secrets` (Geheimnis-Prüfung), `runtime::node` (Download, Prüfung, Cache) |
-| `teleschirm-deploy` | Upload | `config` (Parser `deploy.conf`), `plan` (rclone-Argumente je Zuordnung), `runner` (Ausführung, Seed-Prüfung, Versionsdatei) |
-| `website-manager` (CLI) | Werkzeug der Agentur | `keygen`, `pack` (Positivliste, Bereinigung der `deploy.conf`), `verify`, `deploy`, `node` |
-| `apps/desktop` | Oberfläche des Kunden | `commands` (einzige Schnittstelle zur Web-Ansicht), `packages`, `preview` + `router.php`, `upload`, `tools` (Auffinden von PHP/rclone) |
+| `wm-core` | Paketformat, Vertrauen, Projekte | `archive` (schreiben, prüfen, entpacken), `manifest`, `signing` (Ed25519), `trust` (Absender-Bindung), `secrets` (Geheimnis-Prüfung), `credentials` (Verschlüsselung der Zugangsdaten), `projects` (Versionen, Einstellungen), `runtime::node` (Download, Prüfung, Cache) |
+| `teleschirm-deploy` | Upload | `config` (Parser `deploy.conf`, Wechsel des Zielordners), `plan` (rclone-Argumente je Zuordnung), `runner` (Ausführung, Seed-Prüfung, Versionsdatei), `changes` (hochgeladene/gelöschte Dateien aus der rclone-Ausgabe) |
+| `website-manager` (CLI) | Werkzeug der Agentur | `keygen`, `pack` (Positivliste, Bereinigung der `deploy.conf`, Host-Schlüssel, verschlüsselte Zugangsdaten), `verify`, `deploy`, `node` |
+| `apps/desktop` | Oberfläche des Kunden | `commands` (einzige Schnittstelle zur Web-Ansicht), `overview` (Projektansicht), `deployment` (Einstellungen anwenden, Upload), `keychain` (Schlüsselbund), `files` (Dateiliste), `preview` + `router.php`, `tools` (Auffinden von PHP/rclone); `lib` nimmt Pakete per Doppelklick, zweitem Programmstart und Ziehen ins Fenster an |
 
 ## 5. Abläufe
 
-**Paket erstellen** (`pack`): Build → Dateien nach Positivliste → Geheimnis-Prüfung → SHA-256 je
-Datei ins Manifest → Manifest signieren → ZIP schreiben. Ein Geheimnis-Fund bricht ab, bevor eine
-Datei entsteht.
+**Paket erstellen** (`pack`): Build → Dateien nach Positivliste → `deploy.conf` ohne Schlüsselpfade,
+bei SFTP mit den Host-Schlüsseln des Servers (`ssh-keyscan`, Datei `known_hosts`) → optional
+Zugangsdaten verschlüsselt (`credentials.enc`) → Geheimnis-Prüfung → SHA-256 je Datei ins Manifest →
+Manifest signieren → ZIP schreiben. Ein Geheimnis-Fund bricht ab, bevor eine Datei entsteht.
 
 **Paket öffnen:**
 
@@ -81,19 +82,33 @@ sequenceDiagram
     Cmd->>Core: verify_package (Signatur, Prüfsummen, Pfade)
     Cmd->>Core: TrustStore.check(name, Schlüssel)
     Note over Cmd,Core: anderer Absender → Abbruch
-    Cmd->>Core: extract_package → Zwischenordner → Umbenennen
+    Cmd->>Core: ProjectStore.import → extract_package → versions/<id>/
     Cmd->>Core: TrustStore.bind (nur beim ersten Paket)
-    Cmd-->>UI: PackageSummary
+    Cmd->>Core: geänderte Dateien der Vorversion ermitteln, Version aktuell setzen
+    Cmd-->>UI: OpenResult (Übersicht, erstes Paket, Vorversion, geänderte Dateien)
 ```
+
+Ein Update ersetzt die aktuelle Version; die Vorversion bleibt erhalten (höchstens fünf, ältere in
+den Papierkorb). Einstellungen und Zugangsdaten liegen außerhalb der Versionen und bleiben.
+Enthält das Paket Zugangsdaten, entschlüsselt die App sie mit dem Paketpasswort und legt sie im
+Schlüsselbund ab.
 
 **Ansehen:** freier Port auf `127.0.0.1` → `php -S` mit `dist/` als Wurzel, `router.php`,
 `open_basedir` auf den Paketordner und gesperrten Prozessfunktionen → warten, bis der Port antwortet
 → Standardbrowser öffnen. Beim Beenden der App wird PHP gestoppt.
 
-**Hochladen:** `deploy.conf` laden (Basis = Paketordner) → Versionsdatei vom Server lesen; ist sie
-neuer als das Paket, nur nach Rückfrage weiter → je Zuordnung rclone (`seed`: nur in leere Ziele,
-`protect`: weder hochladen noch löschen) → zuletzt `.website-manager.json` schreiben. „Änderungen
-prüfen“ ist derselbe Lauf mit `--dry-run`.
+**Hochladen:** `deploy.conf` der aktuellen Version laden (Basis = Versionsordner) → Einstellungen
+des Kunden anwenden (Server, Benutzer, Port, Zielordner, im Expertenmodus eigene Zuordnungen) →
+Server-Identität: hinterlegter Host-Schlüssel gilt nur für den Server aus dem Paket, sonst ist eine
+Bestätigung nötig → Zugang: eingegebenes Passwort oder Schlüsselbund (SSH-Schlüssel als temporäre
+Datei mit 0600, nach dem Lauf gelöscht) → Versionsdatei vom Server lesen; ist sie neuer, nur nach
+Rückfrage weiter → je Zuordnung rclone (`seed`: nur in leere Ziele, `protect`: weder hochladen noch
+löschen), jede Zeile als Ereignis an das Fenster → zuletzt `.website-manager.json` schreiben.
+„Jetzt hochladen“ macht immer erst einen Prüflauf (`--dry-run`) und fragt mit der Zahl der neuen und
+gelöschten Dateien nach.
+
+**Wiederherstellen:** eine frühere Version wird wieder aktuell und anschließend wie jede Version
+hochgeladen; die Rückfrage wegen der neueren Version auf dem Server ist dabei erwartet.
 
 ## 6. Sicherheitskonzept
 
@@ -109,13 +124,20 @@ Vertrauensgrenze ist die Paketdatei: Alles darin gilt als fremd, bis die Prüfun
 | Web-Ansicht wird kompromittiert | Tauri-Capability nur `core:default`, strikte CSP, Dateien/Prozesse/Dialoge nur in Rust; Ordner aus der Web-Ansicht werden gegen den App-Datenordner geprüft | `capabilities/`, `commands` |
 | Passwort in Prozessliste oder Log | Übergabe an rclone verschleiert über Umgebungsvariable, nie als Argument; eigene `rclone.conf` des Nutzers wird ignoriert | `plan`, `runner` |
 | Geheimnisse im Paket | Positivliste, Prüfung auf Namen und Inhaltsmerkmale, Schlüsselpfade aus `deploy.conf` entfernt | `secrets`, `pack` |
+| Zugangsdaten im Paket abgefangen | Argon2id (64 MiB, 3 Durchläufe) + AES-256-GCM mit Paketpasswort; Paketpasswort auf anderem Weg; Datei ist signiert und kann nicht getauscht werden | `credentials` |
+| Zugangsdaten auf dem Rechner | nur im Schlüsselbund des Betriebssystems; Export nur neu verschlüsselt mit eigenem Passwort | `keychain`, `commands` |
+| Man-in-the-Middle beim Upload | Host-Schlüssel aus dem Paket (`known_hosts`) für SFTP; ohne passenden Schlüssel nur nach ausdrücklicher Bestätigung | `pack`, `deployment` |
+| älteres Paket überschreibt neueres | Versionsdatei auf dem Server, Rückfrage | `deployment` |
 
 ## 7. Daten und Ablage
 
 | Daten | Ort | Inhalt |
 |---|---|---|
 | Paket | beliebig | `.tsweb`, siehe `docs/formate/paket.md` |
-| geöffnete Pakete | App-Datenordner `projects/<name>/<version>_<created>/` | entpacktes Paket, Kopie des Manifests, `.runtime/` (Router, Sessions, Temp) |
+| Projekt | App-Datenordner `projects/<name>/project.json` | aktuelle Version, Versionsliste, Einstellungen des Kunden |
+| Versionen | App-Datenordner `projects/<name>/versions/<version>_<created>/` | entpacktes Paket, Kopie des Manifests, `.runtime/` (Router, Sessions, Temp, temporärer Schlüssel) |
+| Zugangsdaten | Schlüsselbund, Dienst `com.teleschirm.website-manager`, Konto = Projektname | Passwort und/oder SSH-Schlüssel (JSON) |
+| Zugangs-Export | beliebig, `<name>.wmzugang` | wie `credentials.enc`, mit Übertragungspasswort |
 | Absender-Bindung | App-Datenordner `trust.json` | Projektname → öffentlicher Schlüssel |
 | Node-Laufzeiten | Cache-Ordner `node-v<version>-<os>-<arch>/` | ein Ordner je Version |
 | Versionsdatei | Website-Wurzel auf dem Server | `.website-manager.json`: Name, Version, `created` |
@@ -133,6 +155,8 @@ App-Datenordner unter macOS: `~/Library/Application Support/com.teleschirm.websi
 | Absender-Bindung (TOFU) | funktioniert ohne Zertifizierungsstelle, auch für andere Agenturen | feste Schlüssel im Programm |
 | PHP-Built-in-Server + Router | ein Programm, abschottbar per `-d`; `.htaccess` per Router nachgebildet | Apache/nginx mitliefern |
 | Oberfläche ohne Framework | wenige Ansichten, kein Build-Schritt, kleine Angriffsfläche | React/Vue |
+| Zugangsdaten im Schlüsselbund | Schutz durch das Betriebssystem, kein eigenes Master-Passwort | verschlüsselte Datei im App-Ordner |
+| Versionen statt Server-Backup | schnell, ohne Download; Wiederherstellen = erneut hochladen | Sicherung des Webspace vor jedem Upload |
 
 ## 9. Bekannte Einschränkungen
 
@@ -140,8 +164,12 @@ Messwerte und Befunde der Machbarkeitsprüfung: [spike/phase-0.md](spike/phase-0
 
 * Getestet ist nur macOS; Windows und Linux sind ungeprüft.
 * PHP und rclone werden nicht mitgeliefert; die App nutzt `WM_PHP`/`WM_RCLONE` oder den `PATH`.
-* Bei Passwort-Anmeldung prüft rclone den Host-Schlüssel des Servers nicht.
-* Zugangsdaten werden nicht gespeichert; das Passwort wird bei jedem Upload eingegeben.
+* Ohne Host-Schlüssel im Paket (oder bei geändertem Server) prüft rclone die Server-Identität
+  nicht; die App verlangt dafür eine Bestätigung.
+* Ist kein Schlüsselbund erreichbar (Linux ohne Secret Service), wird das Passwort bei jedem Upload
+  eingegeben.
+* Versionen sichern nur die Paketinhalte; Inhalte aus dem Redaktionssystem auf dem Server werden
+  nicht gesichert.
 * Bauen und Dev-Modus sind nur in der CLI vorhanden (`website-manager node`), nicht in der App.
 * Private npm-Pakete im Lockfile und Umgebungsvariablen nach Unix-Art in npm-Skripten verhindern
   das Bauen beim Kunden.

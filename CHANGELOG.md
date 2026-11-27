@@ -5,6 +5,26 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added
+
+- Projekte mit Versionen: Ein Update ersetzt die aktuelle Version, die letzten fünf bleiben
+  erhalten, ältere wandern in den Papierkorb; eine frühere Version lässt sich wiederherstellen und
+  erneut hochladen. Vom Kunden geänderte Dateien der Vorversion werden beim Update gemeldet.
+- Zugangsdaten: `pack --credentials` legt sie verschlüsselt bei (Argon2id, AES-256-GCM,
+  Paketpasswort); die App übernimmt sie in den Schlüsselbund, exportiert und importiert sie mit
+  eigenem Übertragungspasswort und kann sie entfernen. Anmeldung per Passwort oder SSH-Schlüssel.
+- Server-Identität: `pack` nimmt die SSH-Host-Schlüssel des Servers ins Paket auf; ohne passenden
+  Schlüssel lädt die App nur nach Bestätigung hoch.
+- Upload: Fortschritt live, Liste der neuen und gelöschten Dateien, „Jetzt hochladen“ prüft erst
+  und fragt dann mit der Zahl der Änderungen nach; Website nach dem Upload im Browser öffnen.
+- Einstellungen je Projekt (Verbindung, Server, Benutzer, Port, Zielordner, Adresse der Website),
+  im Expertenmodus eigene Zuordnungen und Schutzregeln; Einstellungen bleiben bei Updates erhalten.
+- Pakete öffnen per Doppelklick, zweitem Programmstart und Ziehen ins Fenster; Startseite mit den
+  bekannten Websites.
+- Dateiliste mit Filter, Öffnen im passenden Programm, Ordner anzeigen; Prüfbericht öffnen.
+- `teleschirm-deploy`: Liste der hochgeladenen und gelöschten Dateien je Lauf, Wechsel des
+  Zielordners (`with_remote_root`).
+
 ## [0.1.0] - 2026-11-27
 
 Machbarkeitsstand (Phase 0), getestet nur unter macOS.

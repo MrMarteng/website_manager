@@ -66,6 +66,14 @@ impl TrustStore {
         }
     }
 
+    /// Publisher key bound to `project`, if any.
+    #[must_use]
+    pub fn publisher(&self, project: &str) -> Option<VerifyingKey> {
+        self.projects
+            .get(project)
+            .and_then(|stored| decode_public_key(stored).ok())
+    }
+
     /// Binds `project` to `key` and saves the store.
     ///
     /// # Errors

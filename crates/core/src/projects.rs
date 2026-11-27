@@ -212,6 +212,21 @@ impl ProjectStore {
         Ok(record)
     }
 
+    /// Removes a version from the list (not the current one) and returns its folder, which
+    /// the caller moves to the trash.
+    ///
+    /// # Errors
+    /// Fails for the current version or an unknown version.
+    pub fn remove_version(&self, name: &str, version_id: &str) -> Result<PathBuf, CoreError> {
+        let mut record = self.load(name)?;
+        if record.current == version_id || !record.versions.iter().any(|id| id == version_id) {
+            return Err(CoreError::MissingEntry(version_id.to_owned()));
+        }
+        record.versions.retain(|id| id != version_id);
+        self.save(&record)?;
+        Ok(self.version_dir(name, version_id))
+    }
+
     /// Reads the manifest of an extracted version.
     ///
     /// # Errors
@@ -331,6 +346,17 @@ mod tests {
         let restored = store.set_current("cafe", "1.0.0_20261101T100000Z").unwrap();
         assert_eq!(restored.current, "1.0.0_20261101T100000Z");
         assert!(store.set_current("cafe", "9.9.9_x").is_err());
+        assert!(
+            store
+                .remove_version("cafe", "1.0.0_20261101T100000Z")
+                .is_err(),
+            "current version"
+        );
+        let removed = store
+            .remove_version("cafe", "1.1.0_20261120T100000Z")
+            .unwrap();
+        assert!(removed.ends_with("versions/1.1.0_20261120T100000Z"));
+        assert_eq!(store.load("cafe").unwrap().versions.len(), 1);
     }
 
     #[test]

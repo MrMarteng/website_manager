@@ -9,6 +9,8 @@ Ein Paket ist ein ZIP-Archiv:
 | `dist/…` | ja | fertig gebaute Website; wird angezeigt und hochgeladen |
 | `project/…` | nein | Quellen zum Neubauen und für den Dev-Modus |
 | `deploy.conf` | nein | Upload-Regeln ([deploy-conf.md](deploy-conf.md)), ohne Pfade des Absender-Rechners |
+| `known_hosts` | nein | SSH-Host-Schlüssel des Servers im OpenSSH-Format; die `deploy.conf` verweist mit `known_hosts_file = known_hosts` darauf |
+| `credentials.enc` | nein | verschlüsselte Zugangsdaten (unten); nur bei der Erstauslieferung |
 | `compliance/…` | nein | Compliance-Bericht |
 
 ## Prüfregeln beim Öffnen
@@ -41,6 +43,21 @@ Ein Paket ist ein ZIP-Archiv:
 `name` besteht aus `a-z`, `A-Z`, `0-9`, `-`, `_`. `created` ist UTC im Format RFC 3339 und dient
 dem Vergleich mit der Versionsdatei auf dem Server.
 
+## `credentials.enc`
+
+```json
+{
+  "kdf": "argon2id",
+  "params": { "memory_kib": 65536, "iterations": 3, "parallelism": 1 },
+  "salt": "<16 Byte, Base64>",
+  "nonce": "<12 Byte, Base64>",
+  "ciphertext": "<AES-256-GCM, Base64>"
+}
+```
+
+Klartext ist JSON `{"password": "…", "privateKey": "…"}` (beide optional). Das Paketpasswort hat
+mindestens 8 Zeichen. Der Export aus der App (`<name>.wmzugang`) hat dasselbe Format.
+
 ## `website-manager.config.json` (im Website-Projekt)
 
 ```json
@@ -63,4 +80,8 @@ dem Vergleich mit der Versionsdatei auf dem Server.
   `node_modules`, `.git`, `.astro`, `.venv` werden nie aufgenommen.
 * `pack` bricht ab, wenn eine Datei nach Geheimnis aussieht (`.env`, Schlüsseldateien, `.npmrc`,
   `auth.json`, private Schlüssel oder Tokens im Inhalt).
-* Aus der `deploy.conf` werden `key_file` und `known_hosts_file` entfernt.
+* Aus der `deploy.conf` werden `key_file` und `known_hosts_file` entfernt. Bei SFTP liest `pack`
+  die Host-Schlüssel des Servers mit `ssh-keyscan` und legt sie als `known_hosts` bei
+  (abschaltbar mit `--no-host-key`).
+* `--credentials <datei.json>` legt Zugangsdaten verschlüsselt bei; das Paketpasswort kommt aus
+  `WM_PACKAGE_PASSWORD` oder wird abgefragt.
