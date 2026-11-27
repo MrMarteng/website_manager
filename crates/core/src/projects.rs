@@ -292,6 +292,7 @@ mod tests {
             version: version.into(),
             created: created.into(),
             node_version: None,
+            build_output: None,
             changelog: vec![],
             logo: None,
             has_credentials: false,

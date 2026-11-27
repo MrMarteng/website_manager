@@ -146,6 +146,7 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
                 }),
         );
     }
+    add_vendored(project, staging, &mut entries, &mut warnings)?;
     if let Some(deploy_conf) = &config.deploy_conf {
         add_deploy_conf(
             &project.join(deploy_conf),
@@ -184,6 +185,7 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
         version: version.clone(),
         created: crate::time::now_rfc3339(),
         node_version: config.node_version.clone(),
+        build_output: Some(config.dist.clone()),
         changelog: config.changelog.clone(),
         logo: config.logo.clone().map(|logo| format!("project/{logo}")),
         has_credentials,
@@ -201,6 +203,42 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
         files: manifest.files.len(),
         warnings,
     })
+}
+
+/// Ships private npm packages under `project/vendor/` and swaps in the rewritten lockfile.
+fn add_vendored(
+    project: &Path,
+    staging: &Path,
+    entries: &mut Vec<PackageEntry>,
+    warnings: &mut Vec<String>,
+) -> Result<(), PackError> {
+    const LOCKFILE: &str = "project/package-lock.json";
+    if !entries.iter().any(|entry| entry.package_path == LOCKFILE) {
+        return Ok(());
+    }
+    let Some(vendored) = crate::vendor::vendor(project, staging)? else {
+        return Ok(());
+    };
+    for entry in entries.iter_mut() {
+        if entry.package_path == LOCKFILE {
+            entry.source.clone_from(&vendored.lockfile);
+        }
+    }
+    for tarball in &vendored.tarballs {
+        let file_name = tarball
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        entries.push(PackageEntry {
+            package_path: format!("project/vendor/{file_name}"),
+            source: tarball.clone(),
+        });
+    }
+    warnings.push(format!(
+        "private Pakete mitgeliefert: {}",
+        vendored.names.join(", ")
+    ));
+    Ok(())
 }
 
 /// Adds the sanitized `deploy.conf` and, if wanted and reachable, the server's host keys.

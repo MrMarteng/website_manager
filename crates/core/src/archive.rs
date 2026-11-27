@@ -277,6 +277,7 @@ mod tests {
             version: "1.0.0".into(),
             created: "2026-11-27T08:00:00Z".into(),
             node_version: None,
+            build_output: None,
             changelog: vec![],
             logo: None,
             has_credentials: false,

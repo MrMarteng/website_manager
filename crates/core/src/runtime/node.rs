@@ -123,6 +123,32 @@ pub fn ensure(version: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError>
     Ok(runtime)
 }
 
+/// Removes cached Node.js releases whose version is not in `keep`; returns the removed folders.
+///
+/// # Errors
+/// Fails if the cache folder cannot be read or a release cannot be removed.
+pub fn prune(cache_dir: &Path, keep: &[String]) -> Result<Vec<PathBuf>, CoreError> {
+    let Ok(entries) = fs::read_dir(cache_dir) else {
+        return Ok(Vec::new());
+    };
+    let mut removed = Vec::new();
+    for entry in entries.filter_map(Result::ok) {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(version) = name
+            .strip_prefix("node-v")
+            .and_then(|rest| rest.split('-').next())
+        else {
+            continue;
+        };
+        if keep.iter().any(|kept| kept == version) || !entry.path().is_dir() {
+            continue;
+        }
+        fs::remove_dir_all(entry.path()).map_err(|e| CoreError::io(entry.path(), e))?;
+        removed.push(entry.path());
+    }
+    Ok(removed)
+}
+
 fn download_text(url: &str) -> Result<String, CoreError> {
     ureq::get(url)
         .call()
@@ -223,6 +249,22 @@ mod tests {
     fn windows_paths_have_no_bin_folder() {
         let runtime = runtime_paths(Path::new("C"), WINDOWS);
         assert_eq!(runtime.node, Path::new("C").join("node.exe"));
+    }
+
+    #[test]
+    fn prune_keeps_listed_versions() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in [
+            "node-v22.12.0-darwin-arm64",
+            "node-v20.1.0-darwin-arm64",
+            "other",
+        ] {
+            fs::create_dir(dir.path().join(name)).unwrap();
+        }
+        let removed = prune(dir.path(), &["22.12.0".to_owned()]).unwrap();
+        assert_eq!(removed.len(), 1);
+        assert!(dir.path().join("node-v22.12.0-darwin-arm64").exists());
+        assert!(dir.path().join("other").exists());
     }
 
     #[test]

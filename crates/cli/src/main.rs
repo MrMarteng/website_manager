@@ -2,6 +2,7 @@
 
 mod pack;
 mod time;
+mod vendor;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
