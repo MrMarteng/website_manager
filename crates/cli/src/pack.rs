@@ -6,8 +6,10 @@ use std::process::Command;
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
+use teleschirm_deploy::{DeployConfig, Protocol};
 use walkdir::WalkDir;
 use wm_core::archive::{PackageEntry, write_package};
+use wm_core::credentials::{self, CREDENTIALS_FILE, Credentials};
 use wm_core::manifest::Manifest;
 use wm_core::secrets::SecretScanner;
 use wm_core::{FORMAT_VERSION, signing};
@@ -27,6 +29,9 @@ const ALWAYS_SKIPPED: &[&str] = &[
 
 /// `deploy.conf` keys that point to files on the publisher's computer.
 const MACHINE_SPECIFIC_KEYS: &[&str] = &["key_file", "known_hosts_file"];
+
+/// Package path of the recorded server host keys.
+const KNOWN_HOSTS_FILE: &str = "known_hosts";
 
 #[derive(Debug, thiserror::Error)]
 pub enum PackError {
@@ -82,6 +87,12 @@ pub struct PackOptions {
     pub output: Option<PathBuf>,
     pub release: Option<String>,
     pub skip_build: bool,
+    /// Hoster credentials to ship encrypted (first delivery only).
+    pub credentials: Option<Credentials>,
+    /// Password protecting the credentials; required together with `credentials`.
+    pub package_password: Option<String>,
+    /// Record the server's SSH host key so the app can verify the server.
+    pub host_key: bool,
 }
 
 pub struct PackReport {
@@ -136,18 +147,13 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
         );
     }
     if let Some(deploy_conf) = &config.deploy_conf {
-        let sanitized = staging.join("deploy.conf");
-        let removed = sanitize_deploy_conf(&project.join(deploy_conf), &sanitized)?;
-        if !removed.is_empty() {
-            warnings.push(format!(
-                "deploy.conf: {} entfernt – Zugang richtet der Kunde im Website Manager ein",
-                removed.join(", ")
-            ));
-        }
-        entries.push(PackageEntry {
-            package_path: "deploy.conf".into(),
-            source: sanitized,
-        });
+        add_deploy_conf(
+            &project.join(deploy_conf),
+            staging,
+            options.host_key,
+            &mut entries,
+            &mut warnings,
+        )?;
     }
     if let Some(report) = &config.compliance {
         let source = project.join(report);
@@ -160,6 +166,8 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
             source,
         });
     }
+
+    let has_credentials = add_credentials(options, staging, &mut entries)?;
 
     let scanner = SecretScanner::new()?;
     let findings: Vec<String> = entries
@@ -178,7 +186,7 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
         node_version: config.node_version.clone(),
         changelog: config.changelog.clone(),
         logo: config.logo.clone().map(|logo| format!("project/{logo}")),
-        has_credentials: false,
+        has_credentials,
         files: std::collections::BTreeMap::new(),
     };
     let output = options
@@ -193,6 +201,81 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
         files: manifest.files.len(),
         warnings,
     })
+}
+
+/// Adds the sanitized `deploy.conf` and, if wanted and reachable, the server's host keys.
+fn add_deploy_conf(
+    source: &Path,
+    staging: &Path,
+    host_key: bool,
+    entries: &mut Vec<PackageEntry>,
+    warnings: &mut Vec<String>,
+) -> Result<(), PackError> {
+    let known_hosts_line = if host_key {
+        match scan_host_key(source) {
+            Ok(Some(keys)) => {
+                let known_hosts = staging.join(KNOWN_HOSTS_FILE);
+                fs::write(&known_hosts, keys).map_err(|e| PackError::File {
+                    path: known_hosts.clone(),
+                    message: e.to_string(),
+                })?;
+                entries.push(PackageEntry {
+                    package_path: KNOWN_HOSTS_FILE.into(),
+                    source: known_hosts,
+                });
+                Some(format!("known_hosts_file = {KNOWN_HOSTS_FILE}"))
+            }
+            Ok(None) => None,
+            Err(message) => {
+                warnings.push(format!(
+                    "Host-Schlüssel nicht ermittelt ({message}) – der Kunde muss den Server beim ersten Upload bestätigen"
+                ));
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let sanitized = staging.join("deploy.conf");
+    let removed = sanitize_deploy_conf(source, &sanitized, known_hosts_line.as_deref())?;
+    if !removed.is_empty() {
+        warnings.push(format!(
+            "deploy.conf: {} entfernt – Zugang richtet der Kunde im Website Manager ein",
+            removed.join(", ")
+        ));
+    }
+    entries.push(PackageEntry {
+        package_path: "deploy.conf".into(),
+        source: sanitized,
+    });
+    Ok(())
+}
+
+/// Adds `credentials.enc` if credentials were given. Returns whether the package has them.
+fn add_credentials(
+    options: &PackOptions,
+    staging: &Path,
+    entries: &mut Vec<PackageEntry>,
+) -> Result<bool, PackError> {
+    match (&options.credentials, &options.package_password) {
+        (None, _) => Ok(false),
+        (Some(credentials), Some(password)) => {
+            let encrypted = staging.join(CREDENTIALS_FILE);
+            let content = credentials::encrypt(credentials, password)?;
+            fs::write(&encrypted, content).map_err(|e| PackError::File {
+                path: encrypted.clone(),
+                message: e.to_string(),
+            })?;
+            entries.push(PackageEntry {
+                package_path: CREDENTIALS_FILE.into(),
+                source: encrypted,
+            });
+            Ok(true)
+        }
+        (Some(_), None) => Err(PackError::Config(
+            "package password missing for credentials".into(),
+        )),
+    }
 }
 
 fn load_config(project: &Path) -> Result<ProjectConfig, PackError> {
@@ -290,7 +373,11 @@ fn collect_tree(
 
 /// Copies a `deploy.conf` without keys that point to the publisher's computer.
 /// Returns the removed keys.
-fn sanitize_deploy_conf(source: &Path, target: &Path) -> Result<Vec<String>, PackError> {
+fn sanitize_deploy_conf(
+    source: &Path,
+    target: &Path,
+    extra_server_line: Option<&str>,
+) -> Result<Vec<String>, PackError> {
     let text = fs::read_to_string(source).map_err(|e| PackError::File {
         path: source.to_path_buf(),
         message: e.to_string(),
@@ -298,9 +385,14 @@ fn sanitize_deploy_conf(source: &Path, target: &Path) -> Result<Vec<String>, Pac
     let mut removed = Vec::new();
     let mut output = String::new();
     let mut in_server_block = true;
+    let mut extra = extra_server_line;
     for line in text.lines() {
         if line.contains(" -> ") {
             in_server_block = false;
+            if let Some(extra_line) = extra.take() {
+                output.push_str(extra_line);
+                output.push_str("\n\n");
+            }
         }
         let key = line.split_once('=').map(|(key, _)| key.trim());
         if in_server_block
@@ -313,11 +405,43 @@ fn sanitize_deploy_conf(source: &Path, target: &Path) -> Result<Vec<String>, Pac
         output.push_str(line);
         output.push('\n');
     }
+    if let Some(extra_line) = extra {
+        output.push_str(extra_line);
+        output.push('\n');
+    }
     fs::write(target, output).map_err(|e| PackError::File {
         path: target.to_path_buf(),
         message: e.to_string(),
     })?;
     Ok(removed)
+}
+
+/// Reads the server's SSH host keys with `ssh-keyscan`. `Ok(None)` for FTPS (no SSH).
+fn scan_host_key(deploy_conf: &Path) -> Result<Option<String>, String> {
+    let config = DeployConfig::load(deploy_conf).map_err(|e| e.to_string())?;
+    if config.server.protocol != Protocol::Sftp {
+        return Ok(None);
+    }
+    let output = Command::new("ssh-keyscan")
+        .args(["-T", "10", "-t", "ed25519,ecdsa,rsa", "-p"])
+        .arg(config.server.port.to_string())
+        .arg(&config.server.host)
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map_err(|e| format!("ssh-keyscan: {e}"))?;
+    let keys = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .fold(String::new(), |mut keys, line| {
+            keys.push_str(line);
+            keys.push('\n');
+            keys
+        });
+    if keys.is_empty() {
+        Err(format!("{} nicht erreichbar", config.server.host))
+    } else {
+        Ok(Some(keys))
+    }
 }
 
 #[cfg(test)]
@@ -366,6 +490,9 @@ mod tests {
             output: Some(output.clone()),
             release: None,
             skip_build: true,
+            credentials: None,
+            package_password: None,
+            host_key: false,
         })
         .unwrap();
         assert_eq!(report.version, "1.0.0");
@@ -400,12 +527,66 @@ mod tests {
             output: Some(output.clone()),
             release: None,
             skip_build: true,
+            credentials: None,
+            package_password: None,
+            host_key: false,
         });
         assert!(matches!(
             result,
             Err(PackError::Core(wm_core::CoreError::SecretsFound(_)))
         ));
         assert!(!output.exists());
+    }
+
+    #[test]
+    fn ships_encrypted_credentials() {
+        let dir = tempfile::tempdir().unwrap();
+        let project = project(dir.path());
+        let output = dir.path().join("out.tsweb");
+        let credentials = Credentials {
+            password: Some("webspace-geheim".into()),
+            private_key: None,
+        };
+        pack(&PackOptions {
+            project,
+            key: key(dir.path()),
+            output: Some(output.clone()),
+            release: None,
+            skip_build: true,
+            credentials: Some(credentials.clone()),
+            package_password: Some("paketpasswort".into()),
+            host_key: false,
+        })
+        .unwrap();
+        let target = dir.path().join("open");
+        let verified = wm_core::archive::extract_package(&output, &target).unwrap();
+        assert!(verified.manifest.has_credentials);
+        let content = fs::read_to_string(target.join(CREDENTIALS_FILE)).unwrap();
+        assert!(!content.contains("webspace-geheim"));
+        assert_eq!(
+            credentials::decrypt(&content, "paketpasswort").unwrap(),
+            credentials
+        );
+    }
+
+    #[test]
+    fn extra_server_line_goes_before_the_mappings() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("deploy.conf");
+        let target = dir.path().join("out.conf");
+        write(
+            &source,
+            "host = h\nuser = u\nkey_file = /k\n\ndist -> /site\n",
+        );
+        sanitize_deploy_conf(&source, &target, Some("known_hosts_file = known_hosts")).unwrap();
+        let text = fs::read_to_string(&target).unwrap();
+        let config = DeployConfig::parse(&text, dir.path()).unwrap();
+        assert_eq!(
+            config.server.known_hosts_file,
+            Some(dir.path().join("known_hosts"))
+        );
+        assert!(config.server.key_file.is_none());
+        assert_eq!(config.mappings.len(), 1);
     }
 
     #[test]

@@ -4,11 +4,13 @@
 //! followed by mappings `<local> -> <remote> | <options>`. Options are `mode=seed|copy`
 //! and `protect=<glob>,<glob>`. The actual transfer is done by rclone.
 
+pub mod changes;
 pub mod config;
 pub mod error;
 pub mod plan;
 pub mod runner;
 
+pub use changes::ChangeKind;
 pub use config::{DeployConfig, Mapping, MappingMode, Protocol, ServerConfig};
 pub use error::DeployError;
 pub use plan::{Connection, Credential, Step, build_plan};

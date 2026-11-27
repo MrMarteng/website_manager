@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 
 use serde::{Deserialize, Serialize};
 
+use crate::changes::{ChangeKind, parse_line};
 use crate::config::{DeployConfig, MappingMode};
 use crate::plan::{
     Connection, Credential, build_plan, connection_settings, remote_path, site_root,
@@ -28,6 +29,10 @@ pub struct RunSummary {
     pub done: usize,
     pub skipped_seed: usize,
     pub dry_run: bool,
+    /// Server paths that were (or in a dry run would be) uploaded.
+    pub uploaded: Vec<String>,
+    /// Server paths that were (or in a dry run would be) deleted.
+    pub deleted: Vec<String>,
 }
 
 /// Executes uploads with a given rclone program.
@@ -87,6 +92,8 @@ impl Runner {
             done: 0,
             skipped_seed: 0,
             dry_run: self.dry_run,
+            uploaded: Vec::new(),
+            deleted: Vec::new(),
         };
         let mut failed = 0;
 
@@ -114,7 +121,18 @@ impl Runner {
                 ]
                 .map(str::to_owned),
             );
-            if self.stream(config, connection, &args, log)? {
+            let target = step.mapping.target.trim_end_matches('/').to_owned();
+            let mut on_line = |line: &str| {
+                if let Some((kind, path)) = parse_line(line) {
+                    let full = format!("{target}/{path}");
+                    match kind {
+                        ChangeKind::Upload => summary.uploaded.push(full),
+                        ChangeKind::Delete => summary.deleted.push(full),
+                    }
+                }
+                log(line);
+            };
+            if self.stream(config, connection, &args, &mut on_line)? {
                 summary.done += 1;
                 log("    OK");
             } else {

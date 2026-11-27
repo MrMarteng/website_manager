@@ -6,7 +6,7 @@ Desktop-Programm, mit dem Website-Inhaber ein von ihrer Webagentur geliefertes W
 *A desktop app that lets website owners open a website package delivered by their web agency,
 preview it locally and upload it to their own webspace – no technical knowledge needed.*
 
-> Version 0.1.0 (Machbarkeitsstand). Änderungen: [CHANGELOG.md](CHANGELOG.md) ·
+> Version 0.2.0 (Kernablauf). Änderungen: [CHANGELOG.md](CHANGELOG.md) ·
 > Architektur: [docs/architektur.md](docs/architektur.md) · Spike-Bericht: [docs/spike/phase-0.md](docs/spike/phase-0.md).
 
 ## So funktioniert es
@@ -44,6 +44,8 @@ cd apps/desktop && npm install && npm run dev
 ```bash
 website-manager keygen --out ~/.config/website-manager/keys     # einmalig, geheimen Schlüssel sichern
 website-manager pack --project <website> --key ~/.config/website-manager/keys/signing.key
+# Erstauslieferung mit Zugang zum Webspace (Paketpasswort getrennt mitteilen):
+WM_PACKAGE_PASSWORD='…' website-manager pack --project <website> --key … --credentials zugang.json
 website-manager verify <paket>.tsweb
 ```
 

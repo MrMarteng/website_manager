@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/core", "crates/deploy", "crates/cli", "apps/desktop/src-tauri"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://git.nas.local/teleschirm/website-manager"
@@ -28,6 +28,15 @@ ureq = "2"
 flate2 = "1"
 tar = "0.4"
 tempfile = "3"
+argon2 = "0.5"
+aes-gcm = "0.10"
+rpassword = "7"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+trash = "5"
+
+# Key derivation is slow without optimisation; keep tests and debug builds usable.
+[profile.dev.package.argon2]
+opt-level = 3
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
