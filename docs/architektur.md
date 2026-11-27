@@ -61,8 +61,8 @@ Abhängigkeiten zeigen nur nach unten; `core` und `deploy` kennen sich nicht.
 |---|---|---|
 | `wm-core` | Paketformat, Vertrauen, Projekte | `archive` (schreiben, prüfen, entpacken), `manifest`, `signing` (Ed25519), `trust` (Absender-Bindung), `secrets` (Geheimnis-Prüfung), `credentials` (Verschlüsselung der Zugangsdaten), `projects` (Versionen, Einstellungen), `runtime::node` (Download, Prüfung, Cache) |
 | `teleschirm-deploy` | Upload | `config` (Parser `deploy.conf`, Wechsel des Zielordners), `plan` (rclone-Argumente je Zuordnung), `runner` (Ausführung, Seed-Prüfung, Versionsdatei), `changes` (hochgeladene/gelöschte Dateien aus der rclone-Ausgabe) |
-| `website-manager` (CLI) | Werkzeug der Agentur | `keygen`, `pack` (Positivliste, Bereinigung der `deploy.conf`, Host-Schlüssel, verschlüsselte Zugangsdaten), `verify`, `deploy`, `node` |
-| `apps/desktop` | Oberfläche des Kunden | `commands` (einzige Schnittstelle zur Web-Ansicht), `overview` (Projektansicht), `deployment` (Einstellungen anwenden, Upload), `keychain` (Schlüsselbund), `files` (Dateiliste), `preview` + `router.php`, `tools` (Auffinden von PHP/rclone); `lib` nimmt Pakete per Doppelklick, zweitem Programmstart und Ziehen ins Fenster an |
+| `website-manager` (CLI) | Werkzeug der Agentur | `keygen`, `pack` (Positivliste, Bereinigung der `deploy.conf`, Host-Schlüssel, verschlüsselte Zugangsdaten, `vendor`: private npm-Pakete als Tarball), `verify`, `deploy`, `node` |
+| `apps/desktop` | Oberfläche des Kunden | `commands` (einzige Schnittstelle zur Web-Ansicht), `overview` (Projektansicht), `deployment` (Einstellungen anwenden, Upload), `keychain` (Schlüsselbund), `files` (Dateiliste), `site` (Neu bauen, Entwicklungsmodus), `preview` + `router.php`, `tools` (Auffinden von PHP/rclone); `lib` nimmt Pakete per Doppelklick, zweitem Programmstart und Ziehen ins Fenster an |
 
 ## 5. Abläufe
 
@@ -107,6 +107,19 @@ löschen), jede Zeile als Ereignis an das Fenster → zuletzt `.website-manager.
 „Jetzt hochladen“ macht immer erst einen Prüflauf (`--dry-run`) und fragt mit der Zahl der neuen und
 gelöschten Dateien nach.
 
+**Neu bauen:** Node.js der im Manifest genannten Version (sonst 22.12.0) laden und prüfen → in
+`project/` `npm ci --ignore-scripts`, falls `node_modules` fehlt oder älter als das Lockfile ist →
+Skript `build` aus `package.json` ohne Shell ausführen (`KEY=wert programm argumente`; `programm`
+wird über das `bin`-Feld des Pakets zur JavaScript-Datei aufgelöst und mit dem geladenen Node
+gestartet) → die Ausgabe (`build_output`, Standard `dist`) ersetzt `dist/` der Version, das
+vorherige `dist/` bleibt in `.runtime/dist-before-build/` → nicht mehr benötigte Node-Versionen
+werden aus dem Cache gelöscht.
+
+**Entwicklungsmodus:** wie „Neu bauen“ bis zum Skript, dann `dev` in eigener Prozessgruppe (bei
+`astro dev` mit `--ignore-lock`); die erste lokale Adresse in der Ausgabe wird im Browser
+geöffnet. Beenden stoppt die ganze Gruppe (erst `TERM`, nach 5 s `KILL`; Windows: `taskkill /T`),
+auch beim Schließen der App.
+
 **Wiederherstellen:** eine frühere Version wird wieder aktuell und anschließend wie jede Version
 hochgeladen; die Rückfrage wegen der neueren Version auf dem Server ist dabei erwartet.
 
@@ -119,7 +132,8 @@ Vertrauensgrenze ist die Paketdatei: Alles darin gilt als fremd, bis die Prüfun
 | verändertes oder untergeschobenes Paket | Ed25519-Signatur über das Manifest, SHA-256 jeder Datei, keine nicht gelisteten Dateien | `archive` |
 | fremder Absender schickt „Update“ | Bindung Projektname → Schlüssel beim ersten Paket (TOFU); später harte Ablehnung | `trust` |
 | Pfad-Ausbruch beim Entpacken | nur relative Normalpfade, keine Links, Entpacken in Zwischenordner | `archive::safe_relative_path` |
-| Code-Ausführung beim Öffnen | Kernablauf führt keinen Paket-Code aus; Bauen nur auf Klick, mit `npm ci --ignore-scripts` | Ablauf |
+| Code-Ausführung beim Öffnen | Kernablauf führt keinen Paket-Code aus; Bauen und Entwicklungsmodus nur auf Klick, mit `npm ci --ignore-scripts`; npm-Skripte ohne Shell (Skripte mit `&&`, `|`, Umleitungen werden abgelehnt) | Ablauf, `site` |
+| verwaiste Prozesse nach dem Entwicklungsmodus | eigene Prozessgruppe, Beenden der ganzen Gruppe | `site` |
 | PHP-Code der Vorschau | nur `127.0.0.1`, `open_basedir`, `disable_functions`, `.htaccess`-Sperren per Router | `preview`, `router.php` |
 | Web-Ansicht wird kompromittiert | Tauri-Capability nur `core:default`, strikte CSP, Dateien/Prozesse/Dialoge nur in Rust; Ordner aus der Web-Ansicht werden gegen den App-Datenordner geprüft | `capabilities/`, `commands` |
 | Passwort in Prozessliste oder Log | Übergabe an rclone verschleiert über Umgebungsvariable, nie als Argument; eigene `rclone.conf` des Nutzers wird ignoriert | `plan`, `runner` |
@@ -139,7 +153,8 @@ Vertrauensgrenze ist die Paketdatei: Alles darin gilt als fremd, bis die Prüfun
 | Zugangsdaten | Schlüsselbund, Dienst `com.teleschirm.website-manager`, Konto = Projektname | Passwort und/oder SSH-Schlüssel (JSON) |
 | Zugangs-Export | beliebig, `<name>.wmzugang` | wie `credentials.enc`, mit Übertragungspasswort |
 | Absender-Bindung | App-Datenordner `trust.json` | Projektname → öffentlicher Schlüssel |
-| Node-Laufzeiten | Cache-Ordner `node-v<version>-<os>-<arch>/` | ein Ordner je Version |
+| Node-Laufzeiten | App-Cache-Ordner `node/node-v<version>-<os>-<arch>/` | ein Ordner je Version; nur Versionen aktueller Projektversionen bleiben |
+| vorheriger Build | Version `.runtime/dist-before-build/` | `dist/` vor dem letzten „Neu bauen“ |
 | Versionsdatei | Website-Wurzel auf dem Server | `.website-manager.json`: Name, Version, `created` |
 | Signaturschlüssel | nur Rechner der Agentur | `signing.key` (0600), `signing.pub` |
 
@@ -170,6 +185,6 @@ Messwerte und Befunde der Machbarkeitsprüfung: [spike/phase-0.md](spike/phase-0
   eingegeben.
 * Versionen sichern nur die Paketinhalte; Inhalte aus dem Redaktionssystem auf dem Server werden
   nicht gesichert.
-* Bauen und Dev-Modus sind nur in der CLI vorhanden (`website-manager node`), nicht in der App.
-* Private npm-Pakete im Lockfile und Umgebungsvariablen nach Unix-Art in npm-Skripten verhindern
-  das Bauen beim Kunden.
+* npm-Skripte `build` und `dev` müssen ohne Shell auskommen (nur `KEY=wert programm argumente`).
+* Node.js-Prüfsummen (`SHASUMS256.txt`) kommen per HTTPS, ihre GPG-Signatur wird nicht geprüft.
+* Bauen und Entwicklungsmodus brauchen beim ersten Mal Internet (Node.js, npm-Pakete).

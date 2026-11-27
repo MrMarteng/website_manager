@@ -5,6 +5,16 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added
+
+- „Neu bauen“ und Entwicklungsmodus in der App: Node.js der Paketversion wird geladen und geprüft,
+  Abhängigkeiten mit `npm ci --ignore-scripts`, npm-Skripte laufen ohne Shell (auch unter Windows);
+  der neue Build ersetzt die Website der Version, der vorherige bleibt erhalten. Der
+  Entwicklungsmodus öffnet sich im Browser und wird mit allen Unterprozessen beendet.
+- `pack` liefert Pakete aus privaten npm-Registries als Tarball mit (`project/vendor/`).
+- Manifest: optionales Feld `build_output`.
+- Nicht mehr benötigte Node.js-Versionen werden aus dem Cache entfernt.
+
 ## [0.2.0] - 2026-11-27
 
 Kernablauf (Phase 1a), getestet nur unter macOS.
