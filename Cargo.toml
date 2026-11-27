@@ -24,7 +24,7 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 walkdir = "2"
 globset = "0.4"
 clap = { version = "4", features = ["derive"] }
-ureq = "2"
+ureq = "3"
 flate2 = "1"
 tar = "0.4"
 tempfile = "3"
