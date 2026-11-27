@@ -57,4 +57,5 @@ The project needs a `website-manager.config.json`, see [docs/formats/package.md]
 ## License
 
 Apache License 2.0, see [LICENSE](LICENSE). Name and logo are not licensed, see
-[TRADEMARKS.md](TRADEMARKS.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
+[TRADEMARKS.md](TRADEMARKS.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md) ·
+Security: [SECURITY.md](SECURITY.md) · [Code of conduct](CODE_OF_CONDUCT.md).
