@@ -6,8 +6,8 @@ Desktop-Programm, mit dem Website-Inhaber ein von ihrer Webagentur geliefertes W
 *A desktop app that lets website owners open a website package delivered by their web agency,
 preview it locally and upload it to their own webspace – no technical knowledge needed.*
 
-> Stand: Phase 0 (Machbarkeit). Ergebnisse: [docs/spike/phase-0.md](docs/spike/phase-0.md).
-> Architektur: [docs/architektur.md](docs/architektur.md).
+> Version 0.1.0 (Machbarkeitsstand). Änderungen: [CHANGELOG.md](CHANGELOG.md) ·
+> Architektur: [docs/architektur.md](docs/architektur.md) · Spike-Bericht: [docs/spike/phase-0.md](docs/spike/phase-0.md).
 
 ## So funktioniert es
 

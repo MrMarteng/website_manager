@@ -1,6 +1,7 @@
 # Architektur
 
-Stand: Phase 0 (27.11.2026). Gliederung angelehnt an arc42, auf das Wesentliche gekürzt.
+Beschreibt den Ist-Zustand der aktuellen Version (siehe [CHANGELOG.md](../CHANGELOG.md)).
+Gliederung angelehnt an arc42, auf das Wesentliche gekürzt. Pflege: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## 1. Zweck und Kontext
 
@@ -133,13 +134,14 @@ App-Datenordner unter macOS: `~/Library/Application Support/com.teleschirm.websi
 | PHP-Built-in-Server + Router | ein Programm, abschottbar per `-d`; `.htaccess` per Router nachgebildet | Apache/nginx mitliefern |
 | Oberfläche ohne Framework | wenige Ansichten, kein Build-Schritt, kleine Angriffsfläche | React/Vue |
 
-## 9. Risiken und offene Punkte
+## 9. Bekannte Einschränkungen
 
-Befunde und Messwerte: [spike/phase-0.md](spike/phase-0.md). Wichtigste offene Punkte:
+Messwerte und Befunde der Machbarkeitsprüfung: [spike/phase-0.md](spike/phase-0.md).
 
-* Windows und Linux ungetestet (WebView2, WebKitGTK, Pfade).
-* PHP und rclone noch nicht mitgeliefert (Sidecars).
-* Host-Schlüssel des Servers wird bei Passwort-Anmeldung noch nicht geprüft.
-* Private npm-Pakete und Unix-Umgebungsvariablen in npm-Skripten blockieren Bauen beim Kunden.
-* Verschlüsselte Zugangsdaten (E1) noch nicht umgesetzt; Passwort wird je Upload eingegeben.
-* Node-Cache in der App noch nicht angebunden (bisher nur CLI).
+* Getestet ist nur macOS; Windows und Linux sind ungeprüft.
+* PHP und rclone werden nicht mitgeliefert; die App nutzt `WM_PHP`/`WM_RCLONE` oder den `PATH`.
+* Bei Passwort-Anmeldung prüft rclone den Host-Schlüssel des Servers nicht.
+* Zugangsdaten werden nicht gespeichert; das Passwort wird bei jedem Upload eingegeben.
+* Bauen und Dev-Modus sind nur in der CLI vorhanden (`website-manager node`), nicht in der App.
+* Private npm-Pakete im Lockfile und Umgebungsvariablen nach Unix-Art in npm-Skripten verhindern
+  das Bauen beim Kunden.
