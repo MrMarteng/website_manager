@@ -26,7 +26,7 @@ jobs:
     name: Format, Clippy, Tests
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Linux libraries for Tauri and the keychain
         run: |
@@ -63,7 +63,7 @@ jobs:
             os: ubuntu-22.04
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Linux libraries for Tauri and the keychain
         if: runner.os == 'Linux'
@@ -71,7 +71,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: npm
@@ -92,7 +92,7 @@ jobs:
       - name: Build the command line program
         run: cargo build --release -p website-manager-cli
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: website-manager-${{ runner.os }}-${{ github.run_number }}
           if-no-files-found: error
@@ -113,9 +113,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: website-manager-*
           path: artifacts
@@ -126,7 +126,7 @@ jobs:
       - name: Release notes from the changelog
         run: python3 .github/scripts/release.py notes "${{ github.ref_name }}" release-notes.md
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: Website Manager ${{ github.ref_name }}
           body_path: release-notes.md
