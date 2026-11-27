@@ -181,29 +181,33 @@ fn keygen(out: &std::path::Path) -> Result<(), String> {
 fn verify(package: &std::path::Path, trust_store: Option<&std::path::Path>) -> Result<(), String> {
     let verified = wm_core::archive::verify_package(package).map_err(|e| e.to_string())?;
     let manifest = &verified.manifest;
+    // Check the publisher before reporting success, so a rejected package never reads as fine.
+    let trust_note = match trust_store {
+        None => String::new(),
+        Some(path) => {
+            let mut store = TrustStore::load(path).map_err(|e| e.to_string())?;
+            match store
+                .check(&manifest.name, &verified.publisher)
+                .map_err(|e| e.to_string())?
+            {
+                TrustDecision::Known => "\n  Absender bekannt.".to_owned(),
+                TrustDecision::FirstUse => {
+                    store
+                        .bind(&manifest.name, &verified.publisher)
+                        .map_err(|e| e.to_string())?;
+                    "\n  Absender neu – für dieses Projekt gespeichert.".to_owned()
+                }
+            }
+        }
+    };
     println!(
-        "Paket in Ordnung: {} {} vom {}\n  Absender:  {}\n  Dateien:   {}",
+        "Paket in Ordnung: {} {} vom {}\n  Absender:  {}\n  Dateien:   {}{trust_note}",
         manifest.name,
         manifest.version,
         manifest.created,
         signing::fingerprint(&verified.publisher),
         manifest.files.len()
     );
-    if let Some(path) = trust_store {
-        let mut store = TrustStore::load(path).map_err(|e| e.to_string())?;
-        match store
-            .check(&manifest.name, &verified.publisher)
-            .map_err(|e| e.to_string())?
-        {
-            TrustDecision::Known => println!("  Absender bekannt."),
-            TrustDecision::FirstUse => {
-                store
-                    .bind(&manifest.name, &verified.publisher)
-                    .map_err(|e| e.to_string())?;
-                println!("  Absender neu – für dieses Projekt gespeichert.");
-            }
-        }
-    }
     Ok(())
 }
 

@@ -20,7 +20,7 @@ pub struct TrustStore {
 }
 
 /// Result of checking a package's publisher against the trust store.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrustDecision {
     /// The project is already bound to this key.
     Known,
