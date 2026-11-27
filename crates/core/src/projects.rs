@@ -59,6 +59,10 @@ pub struct ProjectRecord {
     pub versions: Vec<String>,
     #[serde(default)]
     pub settings: ProjectSettings,
+    /// Credentials for this project are in the OS keychain. Kept here so the app never has to
+    /// read the keychain (which may prompt for a password) just to show this.
+    #[serde(default)]
+    pub credentials_stored: bool,
 }
 
 /// Outcome of importing a package.

@@ -43,6 +43,17 @@ fn overview_of(app: &AppHandle, name: &str) -> Result<Overview, String> {
     overview::build(&store(app)?, &trust_file(app)?, name)
 }
 
+/// Records in `project.json` whether credentials are in the keychain.
+fn mark_credentials(app: &AppHandle, name: &str, stored: bool) -> Result<(), String> {
+    let store = store(app)?;
+    let mut record = store.load(name).map_err(|e| e.to_string())?;
+    if record.credentials_stored != stored {
+        record.credentials_stored = stored;
+        store.save(&record).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn decrypt_error(error: wm_core::CoreError) -> String {
     match error {
         wm_core::CoreError::WrongPassword => "code:wrong-password".to_owned(),
@@ -179,6 +190,7 @@ pub async fn import_package_credentials(
     let content = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
     let decrypted = credentials::decrypt(&content, &password).map_err(decrypt_error)?;
     keychain::store(&name, &decrypted)?;
+    mark_credentials(&app, &name, true)?;
     state.log(format!("credentials for {name} stored in the keychain"));
     overview_of(&app, &name)
 }
@@ -190,6 +202,7 @@ pub fn forget_credentials(
     name: String,
 ) -> Result<Overview, String> {
     keychain::delete(&name)?;
+    mark_credentials(&app, &name, false)?;
     state.log(format!("credentials for {name} removed from the keychain"));
     overview_of(&app, &name)
 }
@@ -235,6 +248,7 @@ pub async fn import_credentials_file(
     let content = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     let decrypted = credentials::decrypt(&content, &password).map_err(decrypt_error)?;
     keychain::store(&name, &decrypted)?;
+    mark_credentials(&app, &name, true)?;
     overview_of(&app, &name).map(Some)
 }
 
@@ -314,6 +328,13 @@ pub async fn upload(
         "upload {name} {} (dry run: {})",
         record.current, request.dry_run
     ));
+    let used_password = match &request.target {
+        deployment::UploadTarget::Server { password } => {
+            password.as_deref().is_some_and(|p| !p.is_empty())
+        }
+        deployment::UploadTarget::LocalFolder { .. } => true,
+    };
+    let project_name = name.clone();
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
@@ -324,8 +345,11 @@ pub async fn upload(
     })
     .await
     .map_err(|e| e.to_string())?;
-    if let Err(error) = &result {
-        state.log(format!("upload failed: {error}"));
+    match &result {
+        // Projects from before the marker existed: the upload just used stored credentials.
+        Ok(_) if !used_password => mark_credentials(&app, &project_name, true)?,
+        Ok(_) => {}
+        Err(error) => state.log(format!("upload failed: {error}")),
     }
     result
 }

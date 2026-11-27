@@ -11,7 +11,6 @@ use wm_core::signing::fingerprint;
 use wm_core::trust::TrustStore;
 
 use crate::deployment::effective_config;
-use crate::keychain;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -155,7 +154,7 @@ pub fn build(store: &ProjectStore, trust_file: &Path, name: &str) -> Result<Over
         settings: record.settings.clone(),
         detected,
         deploy_error,
-        stored_credentials: keychain::has(name),
+        stored_credentials: record.credentials_stored,
         package_has_credentials: manifest.has_credentials
             && folder.join(CREDENTIALS_FILE).is_file(),
         has_compliance: has_prefix("compliance/"),

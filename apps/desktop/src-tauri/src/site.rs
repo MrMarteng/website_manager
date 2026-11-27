@@ -162,13 +162,18 @@ fn own_process_group(command: &mut Command) {
     }
 }
 
+/// Silences a helper command; "no such process" after a clean exit is expected.
+fn quiet(command: &mut Command) -> &mut Command {
+    command.stdout(Stdio::null()).stderr(Stdio::null())
+}
+
 /// Stops a process and everything it started.
 pub fn stop_tree(child: &mut Child) {
     let id = child.id().to_string();
     #[cfg(unix)]
     {
         let group = format!("-{id}");
-        let _ = Command::new("kill").args(["-TERM", &group]).status();
+        let _ = quiet(Command::new("kill").args(["-TERM", &group])).status();
         let deadline = Instant::now() + STOP_GRACE;
         while Instant::now() < deadline {
             if matches!(child.try_wait(), Ok(Some(_))) {
@@ -177,13 +182,11 @@ pub fn stop_tree(child: &mut Child) {
             std::thread::sleep(Duration::from_millis(100));
         }
         // Grandchildren (e.g. PHP of the CMS) may outlive the parent; end the group for sure.
-        let _ = Command::new("kill").args(["-KILL", &group]).status();
+        let _ = quiet(Command::new("kill").args(["-KILL", &group])).status();
     }
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill")
-            .args(["/PID", &id, "/T", "/F"])
-            .status();
+        let _ = quiet(Command::new("taskkill").args(["/PID", &id, "/T", "/F"])).status();
     }
     let _ = child.kill();
     let _ = child.wait();

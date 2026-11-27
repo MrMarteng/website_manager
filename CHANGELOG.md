@@ -15,6 +15,13 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/).
 - Manifest: optionales Feld `build_output`.
 - Nicht mehr benötigte Node.js-Versionen werden aus dem Cache entfernt.
 
+### Fixed
+
+- Der Schlüsselbund wird nur noch beim Upload gelesen und höchstens einmal je Projekt und
+  Sitzung; ob ein Zugang gespeichert ist, steht in `project.json`. Vorher fragte macOS bei jedem
+  Aktualisieren der Ansicht (z. B. nach „Neu bauen“) erneut nach dem Passwort.
+- Beim Beenden des Entwicklungsmodus erscheint keine Meldung „No such process“ mehr.
+
 ## [0.2.0] - 2026-11-27
 
 Kernablauf (Phase 1a), getestet nur unter macOS.

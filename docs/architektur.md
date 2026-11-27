@@ -148,9 +148,9 @@ Vertrauensgrenze ist die Paketdatei: Alles darin gilt als fremd, bis die Prüfun
 | Daten | Ort | Inhalt |
 |---|---|---|
 | Paket | beliebig | `.tsweb`, siehe `docs/formate/paket.md` |
-| Projekt | App-Datenordner `projects/<name>/project.json` | aktuelle Version, Versionsliste, Einstellungen des Kunden |
+| Projekt | App-Datenordner `projects/<name>/project.json` | aktuelle Version, Versionsliste, Einstellungen des Kunden, Merker `credentialsStored` |
 | Versionen | App-Datenordner `projects/<name>/versions/<version>_<created>/` | entpacktes Paket, Kopie des Manifests, `.runtime/` (Router, Sessions, Temp, temporärer Schlüssel) |
-| Zugangsdaten | Schlüsselbund, Dienst `com.teleschirm.website-manager`, Konto = Projektname | Passwort und/oder SSH-Schlüssel (JSON) |
+| Zugangsdaten | Schlüsselbund, Dienst `com.teleschirm.website-manager`, Konto = Projektname | Passwort und/oder SSH-Schlüssel (JSON); gelesen erst beim Upload, höchstens einmal je Projekt und Sitzung (danach aus dem Speicher) |
 | Zugangs-Export | beliebig, `<name>.wmzugang` | wie `credentials.enc`, mit Übertragungspasswort |
 | Absender-Bindung | App-Datenordner `trust.json` | Projektname → öffentlicher Schlüssel |
 | Node-Laufzeiten | App-Cache-Ordner `node/node-v<version>-<os>-<arch>/` | ein Ordner je Version; nur Versionen aktueller Projektversionen bleiben |
