@@ -24,7 +24,7 @@ jobs:
     name: Format, Clippy, Tests
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Linux libraries for Tauri and the keychain
         run: |
@@ -57,7 +57,7 @@ jobs:
             os: ubuntu-22.04
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Linux libraries for Tauri and the keychain
         if: runner.os == 'Linux'
@@ -65,7 +65,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libdbus-1-dev pkg-config
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: npm
@@ -86,7 +86,7 @@ jobs:
       - name: Build the command line program
         run: cargo build --release -p website-manager-cli
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: website-manager-${{ runner.os }}-${{ github.run_number }}
           if-no-files-found: error
