@@ -5,8 +5,10 @@
 * Discuss larger changes in an issue first. Security problems: see [SECURITY.md](SECURITY.md), not
   an issue. Everyone follows the [code of conduct](CODE_OF_CONDUCT.md).
 * Changes go on a branch (in a fork if you are not a maintainer) and reach `main` only through a
-  pull request. `main` requires the check "Format, Clippy, Tests" and an approving review by a code
-  owner (`.github/CODEOWNERS`); pull requests are squash-merged, so the **pull request title** must
+  pull request. `main` requires the check "Format, Clippy, Tests"; only maintainers can merge, and
+  the code owners (`.github/CODEOWNERS`) are asked for a review. Once the project has several
+  maintainers, an approving code owner review becomes mandatory. Pull requests are squash-merged,
+  so the **pull request title** must
   follow [Conventional Commits](https://www.conventionalcommits.org/) (it becomes the commit
   message). Workflows of first-time and outside contributors run after a maintainer approves them.
 * Release tags `v*` can only be created by maintainers.
@@ -45,9 +47,15 @@ These belong to the change and go into the same commit as the code:
   **PATCH** for fixes.
 * `format_version` in the manifest is independent and only increases for incompatible format
   changes.
-* **Release:** rename `[Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a new empty `[Unreleased]`
-  section, raise the version in all three places, add the comparison links at the end of the
-  changelog, and tag `vX.Y.Z` after the merge.
+* **Release:**
+  1. In a pull request: rename `[Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a new empty
+     `[Unreleased]` section, raise the version in all three places, add the comparison links at
+     the end of the changelog.
+  2. After the merge, a maintainer tags `vX.Y.Z` on `main` and pushes the tag.
+  3. The workflow checks tag, versions and changelog, builds all installers and creates a **draft
+     pre-release** with the installers, the CLI programs, `SHA256SUMS` and the changelog section
+     as text (`.github/scripts/release.py`).
+  4. Review the draft on GitHub and publish it.
 
 ## Rust guideline
 

@@ -1,2 +1,3 @@
-# Every change needs a review by the maintainer (enforced by the "main" ruleset).
+# The maintainer is asked to review every pull request. With a single maintainer the review is
+# not enforced; the "main" ruleset requires pull requests and the check "Format, Clippy, Tests".
 * @MrMarteng
