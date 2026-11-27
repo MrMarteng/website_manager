@@ -67,17 +67,95 @@ pub fn runtime_paths(release_dir: &Path, platform: Platform) -> NodeRuntime {
     }
 }
 
-/// Returns the cached runtime for `version`, downloading and verifying it first if needed.
+/// Version numbers as comparable tuple; `None` for anything but `major.minor.patch`.
+fn parse_version(text: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = text.trim_start_matches('v').split('.');
+    let version = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(version)
+}
+
+/// Whether `version` (exact, e.g. `22.23.5`) satisfies `spec`: an exact version, a major
+/// version (`22`) or `lts` (any release; the newest LTS is chosen by [`pick_version`]).
+#[must_use]
+pub fn satisfies(spec: &str, version: &str) -> bool {
+    match spec {
+        "lts" => parse_version(version).is_some(),
+        major if major.chars().all(|c| c.is_ascii_digit()) => {
+            version.split('.').next() == Some(major) && parse_version(version).is_some()
+        }
+        exact => exact == version,
+    }
+}
+
+/// Picks the newest stable release for `spec` from the content of `index.json` of nodejs.org.
+#[must_use]
+pub fn pick_version(index_json: &str, spec: &str) -> Option<String> {
+    let releases: Vec<serde_json::Value> = serde_json::from_str(index_json).ok()?;
+    releases
+        .iter()
+        .filter(|release| spec != "lts" || release["lts"].is_string())
+        .filter_map(|release| release["version"].as_str())
+        .map(|version| version.trim_start_matches('v'))
+        .filter(|version| satisfies(spec, version))
+        .max_by_key(|version| parse_version(version))
+        .map(str::to_owned)
+}
+
+/// Newest cached release that satisfies `spec`.
+fn newest_cached(cache_dir: &Path, spec: &str) -> Option<String> {
+    fs::read_dir(cache_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.strip_prefix("node-v")?
+                .split('-')
+                .next()
+                .map(str::to_owned)
+        })
+        .filter(|version| satisfies(spec, version))
+        .max_by_key(|version| parse_version(version))
+}
+
+/// Turns a version spec into an exact version: exact versions stay, a major version (`22`) or
+/// `lts` resolves to the newest matching release on nodejs.org, or – offline – in the cache.
 ///
 /// # Errors
-/// Fails if the download fails, the checksum does not match or extraction fails.
-pub fn ensure(version: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError> {
-    if !version.chars().all(|c| c.is_ascii_digit() || c == '.') {
+/// Fails for invalid specs or if nothing matches online or in the cache.
+pub fn resolve_version(spec: &str, cache_dir: &Path) -> Result<String, CoreError> {
+    let spec = spec.trim().trim_start_matches('v');
+    if parse_version(spec).is_some() {
+        return Ok(spec.to_owned());
+    }
+    if spec != "lts" && (spec.is_empty() || !spec.chars().all(|c| c.is_ascii_digit())) {
         return Err(CoreError::Download {
-            url: version.to_owned(),
-            message: "Node.js version must look like 22.12.0".into(),
+            url: spec.to_owned(),
+            message: "Node.js version must look like 22.12.0, 22 or lts".into(),
         });
     }
+    let index_url = format!("{DIST_URL}/index.json");
+    match download_text(&index_url) {
+        Ok(index) => pick_version(&index, spec).ok_or_else(|| CoreError::Download {
+            url: index_url,
+            message: format!("no Node.js release matches {spec:?}"),
+        }),
+        Err(error) => newest_cached(cache_dir, spec).ok_or(error),
+    }
+}
+
+/// Returns the cached runtime for `spec` (`22.23.5`, `22` or `lts`), downloading and verifying
+/// it first if needed.
+///
+/// # Errors
+/// Fails if the version cannot be resolved, the download fails, the checksum does not match or
+/// extraction fails.
+pub fn ensure(spec: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError> {
+    let version = resolve_version(spec, cache_dir)?;
+    let version = version.as_str();
     let platform = Platform::current()?;
     let release = release_name(version, platform);
     let release_dir = cache_dir.join(&release);
@@ -123,7 +201,8 @@ pub fn ensure(version: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError>
     Ok(runtime)
 }
 
-/// Removes cached Node.js releases whose version is not in `keep`; returns the removed folders.
+/// Removes cached Node.js releases that no spec in `keep` needs; returns the removed folders.
+/// For a major version or `lts` the newest matching cached release is kept.
 ///
 /// # Errors
 /// Fails if the cache folder cannot be read or a release cannot be removed.
@@ -131,6 +210,16 @@ pub fn prune(cache_dir: &Path, keep: &[String]) -> Result<Vec<PathBuf>, CoreErro
     let Ok(entries) = fs::read_dir(cache_dir) else {
         return Ok(Vec::new());
     };
+    let needed: Vec<String> = keep
+        .iter()
+        .filter_map(|spec| {
+            if parse_version(spec).is_some() {
+                Some(spec.clone())
+            } else {
+                newest_cached(cache_dir, spec)
+            }
+        })
+        .collect();
     let mut removed = Vec::new();
     for entry in entries.filter_map(Result::ok) {
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -140,7 +229,7 @@ pub fn prune(cache_dir: &Path, keep: &[String]) -> Result<Vec<PathBuf>, CoreErro
         else {
             continue;
         };
-        if keep.iter().any(|kept| kept == version) || !entry.path().is_dir() {
+        if needed.iter().any(|kept| kept == version) || !entry.path().is_dir() {
             continue;
         }
         fs::remove_dir_all(entry.path()).map_err(|e| CoreError::io(entry.path(), e))?;
@@ -265,6 +354,45 @@ mod tests {
         assert_eq!(removed.len(), 1);
         assert!(dir.path().join("node-v22.12.0-darwin-arm64").exists());
         assert!(dir.path().join("other").exists());
+    }
+
+    const INDEX: &str = r#"[
+        {"version":"v27.0.0-alpha.0.2.0","lts":false},
+        {"version":"v26.13.1","lts":"Lynx"},
+        {"version":"v25.9.0","lts":false},
+        {"version":"v22.23.5","lts":"Jod"},
+        {"version":"v22.12.0","lts":"Jod"}
+    ]"#;
+
+    #[test]
+    fn picks_versions_from_the_index() {
+        assert_eq!(pick_version(INDEX, "lts").as_deref(), Some("26.13.1"));
+        assert_eq!(pick_version(INDEX, "22").as_deref(), Some("22.23.5"));
+        assert_eq!(pick_version(INDEX, "25").as_deref(), Some("25.9.0"));
+        assert_eq!(pick_version(INDEX, "21"), None);
+        assert!(satisfies("22", "22.23.5"));
+        assert!(!satisfies("22", "2.2.0"));
+        assert!(!satisfies("lts", "27.0.0-alpha.0.2.0"));
+    }
+
+    #[test]
+    fn exact_versions_need_no_network_and_major_falls_back_to_the_cache() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(resolve_version("v22.12.0", dir.path()).unwrap(), "22.12.0");
+        fs::create_dir(dir.path().join("node-v22.20.0-darwin-arm64")).unwrap();
+        fs::create_dir(dir.path().join("node-v22.3.0-darwin-arm64")).unwrap();
+        assert_eq!(newest_cached(dir.path(), "22").as_deref(), Some("22.20.0"));
+    }
+
+    #[test]
+    fn prune_keeps_the_newest_release_of_a_major_version() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["node-v22.20.0-darwin-arm64", "node-v22.3.0-darwin-arm64"] {
+            fs::create_dir(dir.path().join(name)).unwrap();
+        }
+        prune(dir.path(), &["22".to_owned()]).unwrap();
+        assert!(dir.path().join("node-v22.20.0-darwin-arm64").exists());
+        assert!(!dir.path().join("node-v22.3.0-darwin-arm64").exists());
     }
 
     #[test]

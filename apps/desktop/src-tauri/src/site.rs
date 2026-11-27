@@ -16,8 +16,8 @@ use wm_core::runtime::node::NodeRuntime;
 
 use crate::tools;
 
-/// Node.js version used when the package does not name one.
-pub const DEFAULT_NODE_VERSION: &str = "22.12.0";
+/// Node.js version used when the package does not name one: the newest LTS release.
+pub const DEFAULT_NODE_VERSION: &str = "lts";
 /// Characters that need a shell; such scripts are refused.
 const SHELL_SYNTAX: &[&str] = &["&&", "||", "|", ";", ">", "<", "$(", "`", "\n"];
 /// How long the development server may take to print its address.
@@ -234,6 +234,26 @@ fn run_logged(mut command: Command, log: &mut dyn FnMut(&str)) -> Result<(), Str
     }
 }
 
+/// Fails with a clear message if the lockfile still points at private registries the customer
+/// cannot reach (package made by an older `pack`, or without `package-lock.json` in `include`).
+fn refuse_private_packages(lockfile: &Path) -> Result<(), String> {
+    let Ok(text) = fs::read_to_string(lockfile) else {
+        return Ok(());
+    };
+    let Ok(lock) = serde_json::from_str::<Value>(&text) else {
+        return Ok(());
+    };
+    let private = wm_core::runtime::npm::private_packages(&lock);
+    if private.is_empty() {
+        return Ok(());
+    }
+    let names: Vec<String> = private
+        .iter()
+        .map(|package| format!("{}@{}", package.name, package.version))
+        .collect();
+    Err(format!("code:private-packages {}", names.join(", ")))
+}
+
 /// Installs dependencies with `npm ci --ignore-scripts` unless they are already installed
 /// for the current lockfile.
 ///
@@ -246,6 +266,7 @@ pub fn ensure_dependencies(
 ) -> Result<(), String> {
     let installed = project.join("node_modules/.package-lock.json");
     let lockfile = project.join("package-lock.json");
+    refuse_private_packages(&lockfile)?;
     let up_to_date = match (fs::metadata(&installed), fs::metadata(&lockfile)) {
         (Ok(installed), Ok(lock)) => installed.modified().ok() >= lock.modified().ok(),
         _ => false,
@@ -482,6 +503,25 @@ mod tests {
             modules.join("@scope/tool/cli.js")
         );
         assert!(resolve_bin(dir.path(), "missing").is_err());
+    }
+
+    #[test]
+    fn private_registries_are_refused_before_npm_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let lockfile = dir.path().join("package-lock.json");
+        fs::write(
+            &lockfile,
+            r#"{"packages":{"node_modules/@x/cms":{"version":"0.3.1","resolved":"https://git.nas.local/npm/@x/cms/-/cms-0.3.1.tgz"}}}"#,
+        )
+        .unwrap();
+        let error = refuse_private_packages(&lockfile).unwrap_err();
+        assert_eq!(error, "code:private-packages @x/cms@0.3.1");
+        fs::write(
+            &lockfile,
+            r#"{"packages":{"node_modules/@x/cms":{"version":"0.3.1","resolved":"file:vendor/x-cms-0.3.1.tgz"}}}"#,
+        )
+        .unwrap();
+        assert!(refuse_private_packages(&lockfile).is_ok());
     }
 
     #[test]

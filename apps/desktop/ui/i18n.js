@@ -98,6 +98,7 @@ window.WM_TEXTS = {
     "code:command-failed": "Der Vorgang ist fehlgeschlagen ({detail}). Details stehen im Protokoll.",
     "code:build-output-missing": "Der Build hat keine Website in „{detail}“ erzeugt.",
     "code:dev-start-failed": "Der Entwicklungsmodus ist nicht gestartet. Details stehen im Protokoll.",
+    "code:private-packages": "Dieses Paket braucht Bausteine aus einer Quelle, die nur Ihre Webagentur erreicht ({detail}). Bitte fordern Sie ein neues Paket an – mit der aktuellen Version des Website Managers erstellt, enthält es diese Bausteine.",
     "code:no-mappings": "Die Zuordnungen enthalten keine gültige Zeile.",
   },
   en: {
@@ -198,6 +199,7 @@ window.WM_TEXTS = {
     "code:command-failed": "The step failed ({detail}). See the log for details.",
     "code:build-output-missing": "The build did not produce a website in “{detail}”.",
     "code:dev-start-failed": "Development mode did not start. See the log for details.",
+    "code:private-packages": "This package needs components from a source only your web agency can reach ({detail}). Please ask for a new package – created with the current Website Manager, it contains these components.",
     "code:no-mappings": "The mappings contain no valid line.",
   },
 };

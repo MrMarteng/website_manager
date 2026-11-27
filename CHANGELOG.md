@@ -13,8 +13,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `node_version` may be a major version (`22`) or `lts`; it resolves to the newest matching
+  Node.js release (offline: the newest cached one). Without `node_version` the newest LTS is used
+  instead of 22.12.0.
 - Documentation and changelog are written in English; `docs/architektur.md` is now
   `docs/architecture.md`, `docs/formate/` is now `docs/formats/` (`paket.md` → `package.md`).
+
+### Fixed
+
+- Rebuilding a package whose lockfile still points at a private npm registry (created before
+  0.3.0) now stops with a clear message instead of a network error from npm.
 
 ## [0.3.0] - 2026-11-27
 
