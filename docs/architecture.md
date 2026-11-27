@@ -63,7 +63,7 @@ Dependencies only point downwards; `core` and `deploy` do not know each other.
 | `wm-core` | package format, trust, projects | `archive` (write, verify, extract), `manifest`, `signing` (Ed25519), `trust` (publisher binding), `secrets` (secret detection), `credentials` (credential encryption), `projects` (versions, settings), `runtime::node` (download, verification, cache) |
 | `teleschirm-deploy` | upload | `config` (`deploy.conf` parser, change of the target folder), `plan` (rclone arguments per mapping), `runner` (execution, seed check, version file), `changes` (uploaded/deleted files from rclone output) |
 | `website-manager` (CLI) | agency tool | `keygen`, `pack` (positive list, cleaned `deploy.conf`, host keys, encrypted credentials, `vendor`: private npm packages as tarballs), `verify`, `deploy`, `node` |
-| `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode), `preview` + `router.php`, `tools` (locating PHP/rclone); `lib` accepts packages by double-click, second app start and drag and drop |
+| `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode), `preview` + `router.php`, `tools` (locating PHP/rclone: `WM_PHP`/`WM_RCLONE`, then the bundled `wm-php`/`wm-rclone`, then the `PATH`); `lib` accepts packages by double-click, second app start and drag and drop |
 
 ## 5. Flows
 
@@ -94,7 +94,8 @@ to the trash). Settings and credentials live outside the versions and are kept. 
 contains credentials, the app decrypts them with the package password and stores them in the
 keychain.
 
-**Preview:** free port on `127.0.0.1` → `php -S` with `dist/` as root, `router.php`, `open_basedir`
+**Preview:** free port on `127.0.0.1` → `php -S` (the bundled PHP with `-n`, so no `php.ini` of
+the computer applies) with `dist/` as root, `router.php`, `open_basedir`
 limited to the package folder and disabled process functions → wait until the port answers → open
 the default browser. Quitting the app stops PHP.
 
@@ -161,6 +162,8 @@ The trust boundary is the package file: everything in it is untrusted until veri
 | previous build | version `.runtime/dist-before-build/` | `dist/` before the last rebuild |
 | version file | website root on the server | `.website-manager.json`: name, version, `created` |
 | signing key | agency computer only | `signing.key` (0600), `signing.pub` |
+| bundled programs | next to the app executable (`Contents/MacOS/` on macOS) | `wm-php`, `wm-rclone`; versions, URLs and SHA-256 in `apps/desktop/sidecars.json`, licenses in the app resources `licenses/` |
+| `php` for development mode | app cache folder `node/bin/php` | hard link (or copy) of `wm-php`, put first on `PATH` because the CMS development server starts `php` by name |
 
 App data folder on macOS: `~/Library/Application Support/com.teleschirm.website-manager/`.
 
@@ -174,6 +177,7 @@ App data folder on macOS: `~/Library/Application Support/com.teleschirm.website-
 | publisher binding (TOFU) | works without a certificate authority, also for other agencies | keys built into the program |
 | PHP built-in server + router | one program, sandboxed via `-d`; `.htaccess` emulated by the router | shipping Apache/nginx |
 | UI without framework | few views, no build step, small attack surface | React/Vue |
+| PHP and rclone as Tauri sidecars (`wm-` prefix) | customers install nothing; pinned versions and checksums; no clash with `/usr/bin/php` in Linux packages | librclone (Go/cgo per platform), own SFTP sync in Rust (data-loss risk), PHP reimplementations such as phpr (experimental) |
 | credentials in the keychain | protected by the operating system, no own master password | encrypted file in the app folder |
 | versions instead of server backup | fast, no download; restore = upload again | backing up the webspace before every upload |
 
@@ -182,7 +186,9 @@ App data folder on macOS: `~/Library/Application Support/com.teleschirm.website-
 Measurements and findings of the feasibility study: [spike/phase-0.md](spike/phase-0.md).
 
 * Tested on macOS only; Windows and Linux are untested.
-* PHP and rclone are not shipped; the app uses `WM_PHP`/`WM_RCLONE` or the `PATH`.
+* The bundled PHP comes from prebuilt static-php-cli binaries (Windows builds are UPX-packed,
+  which some antivirus programs flag); it is not built in our CI.
+* The bundled programs are not signed yet; macOS notarization will need them signed (phase 3).
 * Without a host key in the package (or with a changed server) rclone does not verify the server's
   identity; the app requires a confirmation for that.
 * Without a reachable keychain (Linux without Secret Service) the password is entered on every

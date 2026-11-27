@@ -5,6 +5,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Installers ship PHP 8.5 (static build with the extensions the CMS needs) and rclone 1.76 as
+  `wm-php`/`wm-rclone`; customers no longer install anything. Versions and SHA-256 checksums are
+  pinned in `apps/desktop/sidecars.json`, license texts ship with the app.
+
+### Changed
+
+- The bundled PHP runs the preview with `-n` (no `php.ini` of the computer). `WM_PHP` and
+  `WM_RCLONE` still override the bundled programs.
+
 ## [0.3.2] - 2026-11-27
 
 ### Changed

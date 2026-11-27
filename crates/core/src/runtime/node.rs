@@ -20,6 +20,8 @@ pub struct NodeRuntime {
     pub node: PathBuf,
     /// The npm entry script, started as `node <npm_cli> …` to avoid shell wrappers.
     pub npm_cli: PathBuf,
+    /// Cache folder that holds all releases (other tools may keep files in it, e.g. `bin/`).
+    pub cache_dir: PathBuf,
 }
 
 /// Name of the release folder, e.g. `node-v22.12.0-darwin-arm64`.
@@ -52,17 +54,22 @@ pub fn checksum_from_shasums(shasums: &str, file_name: &str) -> Option<String> {
 /// Paths of an extracted release in `release_dir`.
 #[must_use]
 pub fn runtime_paths(release_dir: &Path, platform: Platform) -> NodeRuntime {
+    let cache_dir = release_dir
+        .parent()
+        .map_or_else(|| release_dir.to_path_buf(), Path::to_path_buf);
     if platform.is_windows() {
         NodeRuntime {
             bin_dir: release_dir.to_path_buf(),
             node: release_dir.join("node.exe"),
             npm_cli: release_dir.join("node_modules/npm/bin/npm-cli.js"),
+            cache_dir,
         }
     } else {
         NodeRuntime {
             bin_dir: release_dir.join("bin"),
             node: release_dir.join("bin/node"),
             npm_cli: release_dir.join("lib/node_modules/npm/bin/npm-cli.js"),
+            cache_dir,
         }
     }
 }

@@ -183,7 +183,7 @@ pub fn run(
     let rclone = tools::rclone();
     emit(&format!(
         "rclone ({}): {}",
-        rclone.source,
+        rclone.source.label(),
         rclone.program.display()
     ));
     let runner = Runner::new(rclone.program, request.dry_run);

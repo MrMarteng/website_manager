@@ -37,27 +37,14 @@ npm run build    # build the installer → ..\..\target\release\bundle\msi and \
 With `npm run dev` the `.tsweb` file extension is not registered; test double-clicking a package
 with an installed build only.
 
-## 2. Provide PHP and rclone
+## 2. PHP and rclone
 
-The app does not ship either of them yet. The app itself is in German or English; the steps below
-use the English Windows names.
+Installers ship PHP and rclone; nothing else needs to be installed. The log shows `PHP (bundled)`
+and `rclone (bundled)`.
 
-1. **PHP 8.2 or newer:** unpack the ZIP "VS17 x64 Non Thread Safe" from
-   [windows.php.net](https://windows.php.net/download/) to `C:\tools\php`, copy
-   `php.ini-production` to `php.ini` and enable `extension_dir = "ext"`, `extension=mbstring`,
-   `extension=fileinfo` and `extension=gd` in it (remove the semicolon at the start of the line;
-   `dom` and `json` are built in).
-2. **rclone:** unpack the ZIP "Windows amd64" from [rclone.org](https://rclone.org/downloads/) to
-   `C:\tools\rclone`.
-3. Set user environment variables (Settings → System → About → Advanced system settings →
-   Environment Variables) and restart the program afterwards:
-
-   | Variable | Value |
-   |---|---|
-   | `WM_PHP` | `C:\tools\php\php.exe` |
-   | `WM_RCLONE` | `C:\tools\rclone\rclone.exe` |
-
-Check in a new PowerShell: `& $env:WM_PHP -v` and `& $env:WM_RCLONE version`.
+Only when building yourself with `npm run dev` (section 1b), the programs come from the `PATH`.
+To use other copies, set the user environment variables `WM_PHP` and `WM_RCLONE` to the full path
+of `php.exe` and `rclone.exe` and restart the program; they take precedence over the bundled ones.
 
 ## 3. Test package
 

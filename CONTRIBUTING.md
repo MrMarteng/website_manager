@@ -14,6 +14,10 @@
 * Release tags `v*` can only be created by maintainers.
 * Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/).
 * New behaviour needs a test. Documentation and changelog change in the same commit (see below).
+* Installers bundle PHP and rclone. Locally: `cd apps/desktop && npm run sidecars` (downloads the
+  pinned versions for this computer and checks their SHA-256), then `npm run build:release`. To
+  update a program, edit `apps/desktop/sidecars.json` and run
+  `python3 .github/scripts/sidecars.py lock`.
 * Before pushing: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo test --workspace`. The same steps run in CI (`.github/workflows/build.yml`); installers
   are built there on tags `v*` and on demand.

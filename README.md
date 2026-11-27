@@ -35,8 +35,10 @@ The app's user interface is available in German and English.
 
 ## Development
 
-Requirements: Rust (stable), Node.js (only for the Tauri CLI), rclone and PHP ≥ 8.2 on the `PATH`
-(until PHP and rclone ship with the app; alternatively set `WM_PHP` and `WM_RCLONE`).
+Requirements: Rust (stable), Node.js (only for the Tauri CLI) and Python 3 (to fetch the bundled
+programs). `npm run dev` uses PHP ≥ 8.2 and rclone from the `PATH` (or `WM_PHP`/`WM_RCLONE`);
+installers ship their own copies, fetched with `npm run sidecars` and built with
+`npm run build:release`.
 
 ```bash
 cargo test --workspace

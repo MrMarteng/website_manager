@@ -57,10 +57,16 @@ jobs:
         include:
           - name: Windows
             os: windows-latest
+            target: x86_64-pc-windows-msvc
+            python: python
           - name: macOS (Apple Silicon)
             os: macos-latest
+            target: aarch64-apple-darwin
+            python: python3
           - name: Linux
             os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            python: python3
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -85,9 +91,12 @@ jobs:
         working-directory: apps/desktop
         run: npm ci
 
+      - name: Fetch PHP and rclone (pinned in apps/desktop/sidecars.json)
+        run: ${{ matrix.python }} .github/scripts/sidecars.py fetch ${{ matrix.target }}
+
       - name: Build the installer
         working-directory: apps/desktop
-        run: npm run build
+        run: npm run build:release
 
       - name: Build the command line program
         run: cargo build --release -p website-manager-cli

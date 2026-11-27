@@ -7,7 +7,9 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "icons": "tauri icon assets/icon-source.png"
+    "icons": "tauri icon assets/icon-source.png",
+    "build:release": "tauri build --config src-tauri/tauri.bundle.conf.json",
+    "sidecars": "python3 ../../.github/scripts/sidecars.py fetch"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

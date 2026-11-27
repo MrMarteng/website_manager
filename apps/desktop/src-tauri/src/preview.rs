@@ -65,10 +65,15 @@ pub fn start(folder: &Path, log: &Arc<Mutex<Vec<String>>>) -> Result<Preview, St
     let php = tools::php();
     push_log(
         log,
-        format!("PHP ({}): {}", php.source, php.program.display()),
+        format!("PHP ({}): {}", php.source.label(), php.program.display()),
     );
 
-    let mut child = Command::new(&php.program)
+    let mut command = Command::new(&php.program);
+    if php.source == tools::Source::Bundled {
+        // The bundled PHP has its extensions built in; ignore any php.ini on the computer.
+        command.arg("-n");
+    }
+    let mut child = command
         .arg("-S")
         .arg(&address)
         .arg("-t")
