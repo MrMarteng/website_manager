@@ -264,8 +264,10 @@ pub fn stop_tree(child: &mut Child) {
     let id = child.id().to_string();
     #[cfg(unix)]
     {
+        // `--` is required: procps `kill` (Linux) reads `-1234` as options otherwise and ends
+        // up signalling every process of the user (`kill(-1)`).
         let group = format!("-{id}");
-        let _ = quiet(Command::new("kill").args(["-TERM", &group])).status();
+        let _ = quiet(Command::new("kill").args(["-s", "TERM", "--", &group])).status();
         let deadline = Instant::now() + STOP_GRACE;
         while Instant::now() < deadline {
             if matches!(child.try_wait(), Ok(Some(_))) {
@@ -274,7 +276,7 @@ pub fn stop_tree(child: &mut Child) {
             std::thread::sleep(Duration::from_millis(100));
         }
         // Grandchildren (e.g. PHP of the CMS) may outlive the parent; end the group for sure.
-        let _ = quiet(Command::new("kill").args(["-KILL", &group])).status();
+        let _ = quiet(Command::new("kill").args(["-s", "KILL", "--", &group])).status();
     }
     #[cfg(windows)]
     {
