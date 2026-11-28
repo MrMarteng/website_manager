@@ -183,7 +183,7 @@ pub fn pack(options: &PackOptions) -> Result<PackReport, PackError> {
         format_version: FORMAT_VERSION,
         name: config.name.clone(),
         version: version.clone(),
-        created: crate::time::now_rfc3339(),
+        created: wm_core::time::now_rfc3339(),
         node_version: config.node_version.clone(),
         build_output: Some(config.dist.clone()),
         changelog: config.changelog.clone(),

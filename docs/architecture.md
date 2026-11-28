@@ -63,7 +63,8 @@ Dependencies only point downwards; `core` and `deploy` do not know each other.
 | `wm-core` | package format, trust, projects | `archive` (write, verify, extract), `manifest`, `signing` (Ed25519), `trust` (publisher binding), `secrets` (secret detection), `credentials` (credential encryption), `projects` (versions, settings), `runtime::node` (download, verification, cache) |
 | `teleschirm-deploy` | upload | `config` (`deploy.conf` parser, change of the target folder), `plan` (rclone arguments per mapping), `runner` (execution, seed check, version file), `changes` (uploaded/deleted files from rclone output) |
 | `website-manager` (CLI) | agency tool | `keygen`, `pack` (positive list, cleaned `deploy.conf`, host keys, encrypted credentials, `vendor`: private npm packages as tarballs), `verify`, `deploy`, `node` |
-| `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode), `preview` + `router.php`, `tools` (locating PHP/rclone: `WM_PHP`/`WM_RCLONE`, then the bundled `wm-php`/`wm-rclone`, then the `PATH`); `lib` accepts packages by double-click, second app start and drag and drop |
+| `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode), `preview` + `router.php`, `error` (`CommandError` with `code` and `detail` for the UI), `tools` (locating PHP/rclone: `WM_PHP`/`WM_RCLONE`, then the bundled `wm-php`/`wm-rclone`, then the `PATH`); `lib` accepts packages by double-click, second app start and drag and drop |
+| `apps/desktop/ui` | web view | TypeScript + Vite, no framework: `api` (typed commands and events: upload/build lines, `server-status`), `store`, `router` (hash routes per website and section), `views/` (overview, publish, versions, edit with file tree, settings, log), `i18n/` (German/English, error codes) |
 
 ## 5. Flows
 
@@ -176,7 +177,7 @@ App data folder on macOS: `~/Library/Application Support/com.teleschirm.website-
 | rclone instead of own SFTP logic | proven sync, SFTP and FTPS, works without a shell on the server | own library |
 | publisher binding (TOFU) | works without a certificate authority, also for other agencies | keys built into the program |
 | PHP built-in server + router | one program, sandboxed via `-d`; `.htaccess` emulated by the router | shipping Apache/nginx |
-| UI without framework | few views, no build step, small attack surface | React/Vue |
+| UI in TypeScript with Vite, without framework | type checks against the Rust commands, tests with Vitest, small bundle and attack surface; the build output contains no inline code (strict CSP) | React/Vue, Next.js (server rendering not usable in Tauri) |
 | PHP and rclone as Tauri sidecars (`wm-` prefix) | customers install nothing; pinned versions and checksums; no clash with `/usr/bin/php` in Linux packages | librclone (Go/cgo per platform), own SFTP sync in Rust (data-loss risk), PHP reimplementations such as phpr (experimental) |
 | credentials in the keychain | protected by the operating system, no own master password | encrypted file in the app folder |
 | versions instead of server backup | fast, no download; restore = upload again | backing up the webspace before every upload |

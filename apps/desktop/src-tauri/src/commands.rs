@@ -11,6 +11,7 @@ use wm_core::credentials::{self, CREDENTIALS_FILE};
 use wm_core::projects::{ProjectSettings, ProjectStore};
 
 use crate::deployment::{self, UploadRequest, UploadResult};
+use crate::error::CommandError;
 use crate::files::{self, FileEntry};
 use crate::overview::{self, Overview};
 use crate::{AppState, BUILD_EVENT, UPLOAD_EVENT, keychain, preview, site};
@@ -54,6 +55,58 @@ fn mark_credentials(app: &AppHandle, name: &str, stored: bool) -> Result<(), Str
     Ok(())
 }
 
+/// Records the last successful upload in `project.json` (shown as "online" in the overview).
+fn remember_upload(
+    app: &AppHandle,
+    name: &str,
+    target: &str,
+    destination: &str,
+) -> Result<(), String> {
+    let store = store(app)?;
+    let mut record = store.load(name).map_err(|e| e.to_string())?;
+    let manifest = store
+        .manifest(name, &record.current)
+        .map_err(|e| e.to_string())?;
+    record.last_upload = Some(wm_core::projects::LastUpload {
+        version: manifest.version,
+        created: manifest.created,
+        uploaded_at: wm_core::time::now_rfc3339(),
+        target: target.to_owned(),
+        destination: destination.to_owned(),
+    });
+    store.save(&record).map_err(|e| e.to_string())
+}
+
+/// Running preview and development server, sent to the window after every change.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerStatus {
+    pub preview: Option<String>,
+    pub dev: Option<String>,
+}
+
+fn current_status(state: &AppState) -> ServerStatus {
+    let preview = state.preview.lock().ok().and_then(|mut slot| {
+        let running = slot.as_mut()?;
+        running.is_running().then(|| running.url.clone())
+    });
+    let dev = state.dev.lock().ok().and_then(|mut slot| {
+        let running = slot.as_mut()?;
+        running.is_running().then(|| running.url.clone())
+    });
+    ServerStatus { preview, dev }
+}
+
+fn emit_status(app: &AppHandle, state: &AppState) {
+    let _ = app.emit(crate::STATUS_EVENT, current_status(state));
+}
+
+/// Preview and development server state (also sent as event `server-status`).
+#[tauri::command]
+pub fn server_status(state: State<'_, AppState>) -> ServerStatus {
+    current_status(&state)
+}
+
 fn decrypt_error(error: wm_core::CoreError) -> String {
     match error {
         wm_core::CoreError::WrongPassword => "code:wrong-password".to_owned(),
@@ -70,7 +123,7 @@ pub struct ProjectListItem {
 
 /// Projects opened before, for the start screen.
 #[tauri::command]
-pub fn list_projects(app: AppHandle) -> Result<Vec<ProjectListItem>, String> {
+pub fn list_projects(app: AppHandle) -> Result<Vec<ProjectListItem>, CommandError> {
     let store = store(&app)?;
     Ok(store
         .list()
@@ -133,7 +186,7 @@ fn open_path(app: &AppHandle, state: &AppState, path: &Path) -> Result<OpenResul
 pub async fn pick_package(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Option<OpenResult>, String> {
+) -> Result<Option<OpenResult>, CommandError> {
     let Some(choice) = app
         .dialog()
         .file()
@@ -143,7 +196,9 @@ pub async fn pick_package(
         return Ok(None);
     };
     let path = choice.into_path().map_err(|e| e.to_string())?;
-    open_path(&app, &state, &path).map(Some)
+    open_path(&app, &state, &path)
+        .map(Some)
+        .map_err(CommandError::from)
 }
 
 /// Opens the next package handed over by double-click or drag and drop.
@@ -151,14 +206,16 @@ pub async fn pick_package(
 pub async fn take_pending_open(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<Option<OpenResult>, String> {
+) -> Result<Option<OpenResult>, CommandError> {
     let next = state
         .pending_open
         .lock()
         .ok()
         .and_then(|mut pending| (!pending.is_empty()).then(|| pending.remove(0)));
     match next {
-        Some(path) => open_path(&app, &state, &path).map(Some),
+        Some(path) => open_path(&app, &state, &path)
+            .map(Some)
+            .map_err(CommandError::from),
         None => Ok(None),
     }
 }
@@ -169,13 +226,13 @@ pub async fn open_package(
     app: AppHandle,
     state: State<'_, AppState>,
     path: String,
-) -> Result<OpenResult, String> {
-    open_path(&app, &state, &PathBuf::from(path))
+) -> Result<OpenResult, CommandError> {
+    open_path(&app, &state, &PathBuf::from(path)).map_err(CommandError::from)
 }
 
 #[tauri::command]
-pub fn project_overview(app: AppHandle, name: String) -> Result<Overview, String> {
-    overview_of(&app, &name)
+pub fn project_overview(app: AppHandle, name: String) -> Result<Overview, CommandError> {
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 /// Decrypts the credentials shipped in the current version and stores them in the keychain.
@@ -185,14 +242,14 @@ pub async fn import_package_credentials(
     state: State<'_, AppState>,
     name: String,
     password: String,
-) -> Result<Overview, String> {
+) -> Result<Overview, CommandError> {
     let file = current_folder(&app, &name)?.join(CREDENTIALS_FILE);
     let content = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
     let decrypted = credentials::decrypt(&content, &password).map_err(decrypt_error)?;
     keychain::store(&name, &decrypted)?;
     mark_credentials(&app, &name, true)?;
     state.log(format!("credentials for {name} stored in the keychain"));
-    overview_of(&app, &name)
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 #[tauri::command]
@@ -200,11 +257,11 @@ pub fn forget_credentials(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
-) -> Result<Overview, String> {
+) -> Result<Overview, CommandError> {
     keychain::delete(&name)?;
     mark_credentials(&app, &name, false)?;
     state.log(format!("credentials for {name} removed from the keychain"));
-    overview_of(&app, &name)
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 /// Saves the stored credentials, encrypted with a new password, to a file for another computer.
@@ -213,7 +270,7 @@ pub async fn export_credentials(
     app: AppHandle,
     name: String,
     password: String,
-) -> Result<bool, String> {
+) -> Result<bool, CommandError> {
     let stored = keychain::load(&name)?.ok_or("code:no-credentials")?;
     let content = credentials::encrypt(&stored, &password).map_err(|e| e.to_string())?;
     let Some(choice) = app
@@ -235,7 +292,7 @@ pub async fn import_credentials_file(
     app: AppHandle,
     name: String,
     password: String,
-) -> Result<Option<Overview>, String> {
+) -> Result<Option<Overview>, CommandError> {
     let Some(choice) = app
         .dialog()
         .file()
@@ -249,7 +306,9 @@ pub async fn import_credentials_file(
     let decrypted = credentials::decrypt(&content, &password).map_err(decrypt_error)?;
     keychain::store(&name, &decrypted)?;
     mark_credentials(&app, &name, true)?;
-    overview_of(&app, &name).map(Some)
+    overview_of(&app, &name)
+        .map(Some)
+        .map_err(CommandError::from)
 }
 
 /// Saves the customer's settings after checking that they produce a valid configuration.
@@ -259,7 +318,7 @@ pub fn save_settings(
     state: State<'_, AppState>,
     name: String,
     settings: ProjectSettings,
-) -> Result<Overview, String> {
+) -> Result<Overview, CommandError> {
     let store = store(&app)?;
     let mut record = store.load(&name).map_err(|e| e.to_string())?;
     let folder = store.version_dir(&name, &record.current);
@@ -269,7 +328,7 @@ pub fn save_settings(
     record.settings = settings;
     store.save(&record).map_err(|e| e.to_string())?;
     state.log(format!("settings of {name} saved"));
-    overview_of(&app, &name)
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 /// Starts the preview of the current version and opens it in the default browser.
@@ -278,7 +337,7 @@ pub async fn start_preview(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     let folder = current_folder(&app, &name)?;
     stop_current(&state);
     let running = preview::start(&folder, &state.log)?;
@@ -287,6 +346,7 @@ pub async fn start_preview(
     if let Ok(mut slot) = state.preview.lock() {
         *slot = Some(running);
     }
+    emit_status(&app, &state);
     app.opener()
         .open_url(&url, None::<&str>)
         .map_err(|e| e.to_string())?;
@@ -294,8 +354,9 @@ pub async fn start_preview(
 }
 
 #[tauri::command]
-pub fn stop_preview(state: State<'_, AppState>) {
+pub fn stop_preview(app: AppHandle, state: State<'_, AppState>) {
     stop_current(&state);
+    emit_status(&app, &state);
 }
 
 /// URL of the running preview, if any.
@@ -320,7 +381,7 @@ pub async fn upload(
     state: State<'_, AppState>,
     name: String,
     request: UploadRequest,
-) -> Result<UploadResult, String> {
+) -> Result<UploadResult, CommandError> {
     let store = store(&app)?;
     let record = store.load(&name).map_err(|e| e.to_string())?;
     let folder = store.version_dir(&name, &record.current);
@@ -334,6 +395,16 @@ pub async fn upload(
         }
         deployment::UploadTarget::LocalFolder { .. } => true,
     };
+    let dry_run = request.dry_run;
+    let (target, destination) = match &request.target {
+        deployment::UploadTarget::Server { .. } => (
+            "server",
+            deployment::effective_config(&folder, &record.settings)
+                .map(|(config, _)| config.server.host)
+                .unwrap_or_default(),
+        ),
+        deployment::UploadTarget::LocalFolder { folder } => ("folder", folder.clone()),
+    };
     let project_name = name.clone();
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
@@ -346,12 +417,18 @@ pub async fn upload(
     .await
     .map_err(|e| e.to_string())?;
     match &result {
-        // Projects from before the marker existed: the upload just used stored credentials.
-        Ok(_) if !used_password => mark_credentials(&app, &project_name, true)?,
-        Ok(_) => {}
+        Ok(_) => {
+            // Projects from before the marker existed: the upload just used stored credentials.
+            if !used_password {
+                mark_credentials(&app, &project_name, true)?;
+            }
+            if !dry_run {
+                remember_upload(&app, &project_name, target, &destination)?;
+            }
+        }
         Err(error) => state.log(format!("upload failed: {error}")),
     }
-    result
+    result.map_err(CommandError::from)
 }
 
 /// Makes an earlier version the current one; the window then uploads it.
@@ -361,12 +438,12 @@ pub fn restore_version(
     state: State<'_, AppState>,
     name: String,
     id: String,
-) -> Result<Overview, String> {
+) -> Result<Overview, CommandError> {
     store(&app)?
         .set_current(&name, &id)
         .map_err(|e| e.to_string())?;
     state.log(format!("{name}: version {id} is current again"));
-    overview_of(&app, &name)
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 /// Moves an earlier version to the trash.
@@ -376,41 +453,41 @@ pub fn remove_version(
     state: State<'_, AppState>,
     name: String,
     id: String,
-) -> Result<Overview, String> {
+) -> Result<Overview, CommandError> {
     let folder = store(&app)?
         .remove_version(&name, &id)
         .map_err(|e| e.to_string())?;
     trash::delete(&folder).map_err(|e| e.to_string())?;
     state.log(format!("{name}: version {id} moved to the trash"));
-    overview_of(&app, &name)
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 #[tauri::command]
-pub fn list_files(app: AppHandle, name: String) -> Result<Vec<FileEntry>, String> {
+pub fn list_files(app: AppHandle, name: String) -> Result<Vec<FileEntry>, CommandError> {
     Ok(files::list(&current_folder(&app, &name)?))
 }
 
 /// Opens a file of the current version in the program the system uses for it.
 #[tauri::command]
-pub fn open_file(app: AppHandle, name: String, path: String) -> Result<(), String> {
+pub fn open_file(app: AppHandle, name: String, path: String) -> Result<(), CommandError> {
     let file = files::resolve(&current_folder(&app, &name)?, &path)?;
     app.opener()
         .open_path(file.to_string_lossy(), None::<&str>)
-        .map_err(|e| e.to_string())
+        .map_err(|e| CommandError::from(e.to_string()))
 }
 
 /// Shows the folder of the current version in the file manager.
 #[tauri::command]
-pub fn reveal_project(app: AppHandle, name: String) -> Result<(), String> {
+pub fn reveal_project(app: AppHandle, name: String) -> Result<(), CommandError> {
     let folder = current_folder(&app, &name)?;
     app.opener()
         .reveal_item_in_dir(folder.join("dist"))
-        .map_err(|e| e.to_string())
+        .map_err(|e| CommandError::from(e.to_string()))
 }
 
 /// Opens the first compliance report of the current version.
 #[tauri::command]
-pub fn open_compliance(app: AppHandle, name: String) -> Result<(), String> {
+pub fn open_compliance(app: AppHandle, name: String) -> Result<(), CommandError> {
     let folder = current_folder(&app, &name)?;
     let report = files::list(&folder)
         .into_iter()
@@ -421,7 +498,7 @@ pub fn open_compliance(app: AppHandle, name: String) -> Result<(), String> {
 
 /// Opens the public website (domain from the settings) in the browser.
 #[tauri::command]
-pub fn open_website(app: AppHandle, name: String) -> Result<(), String> {
+pub fn open_website(app: AppHandle, name: String) -> Result<(), CommandError> {
     let record = store(&app)?.load(&name).map_err(|e| e.to_string())?;
     let domain = record.settings.domain.ok_or("no domain set")?;
     let url = if domain.starts_with("https://") || domain.starts_with("http://") {
@@ -431,7 +508,7 @@ pub fn open_website(app: AppHandle, name: String) -> Result<(), String> {
     };
     app.opener()
         .open_url(url, None::<&str>)
-        .map_err(|e| e.to_string())
+        .map_err(|e| CommandError::from(e.to_string()))
 }
 
 /// The expert log.
@@ -446,7 +523,7 @@ pub fn read_log(state: State<'_, AppState>) -> Vec<String> {
 
 /// Saves the log to a file chosen by the user (for support requests).
 #[tauri::command]
-pub async fn export_log(app: AppHandle, state: State<'_, AppState>) -> Result<bool, String> {
+pub async fn export_log(app: AppHandle, state: State<'_, AppState>) -> Result<bool, CommandError> {
     let Some(choice) = app
         .dialog()
         .file()
@@ -533,7 +610,7 @@ pub async fn build_site(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
-) -> Result<Overview, String> {
+) -> Result<Overview, CommandError> {
     state.log(format!("build {name}"));
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
@@ -556,7 +633,7 @@ pub async fn build_site(
     }
     result?;
     prune_node_cache(&app, &state);
-    overview_of(&app, &name)
+    overview_of(&app, &name).map_err(CommandError::from)
 }
 
 /// Starts the development server of the current version and opens it in the browser.
@@ -565,7 +642,7 @@ pub async fn start_dev(
     app: AppHandle,
     state: State<'_, AppState>,
     name: String,
-) -> Result<String, String> {
+) -> Result<String, CommandError> {
     stop_dev_server(&state);
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
@@ -587,6 +664,7 @@ pub async fn start_dev(
     if let Ok(mut slot) = state.dev.lock() {
         *slot = Some(server);
     }
+    emit_status(&app, &state);
     app.opener()
         .open_url(&url, None::<&str>)
         .map_err(|e| e.to_string())?;
@@ -594,8 +672,9 @@ pub async fn start_dev(
 }
 
 #[tauri::command]
-pub fn stop_dev(state: State<'_, AppState>) {
+pub fn stop_dev(app: AppHandle, state: State<'_, AppState>) {
     stop_dev_server(&state);
+    emit_status(&app, &state);
 }
 
 /// URL of the running development server, if any.

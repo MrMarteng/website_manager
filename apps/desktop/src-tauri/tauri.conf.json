@@ -4,21 +4,25 @@
   "version": "0.3.2",
   "identifier": "com.teleschirm.website-manager",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../ui/dist",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeDevCommand": "npm run ui:dev",
+    "beforeBuildCommand": "npm run ui:build"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [
       {
         "title": "Website Manager",
-        "width": 960,
-        "height": 720,
-        "minWidth": 640,
-        "minHeight": 520
+        "width": 1120,
+        "height": 760,
+        "minWidth": 800,
+        "minHeight": 560
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost",
+      "devCsp": "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src ipc: http://ipc.localhost ws://127.0.0.1:1420"
     }
   },
   "bundle": {
@@ -33,7 +37,9 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["tsweb"],
+        "ext": [
+          "tsweb"
+        ],
         "name": "Website-Paket",
         "description": "Website Manager package",
         "role": "Viewer"

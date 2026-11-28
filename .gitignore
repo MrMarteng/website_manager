@@ -4,3 +4,4 @@
 *.tsweb
 .DS_Store
 /apps/desktop/src-tauri/binaries/
+/apps/desktop/ui/dist/

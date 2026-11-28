@@ -3,6 +3,8 @@
 A desktop app that lets website owners open a website package delivered by their web agency,
 preview it locally and upload it to their own webspace – no technical knowledge needed.
 
+![Overview of a website in the Website Manager: local and online version, stored access and the next step](docs/images/overview.png)
+
 > Version 0.3.2 (core workflow with rebuild and development mode). Changes: [CHANGELOG.md](CHANGELOG.md) ·
 > Architecture: [docs/architecture.md](docs/architecture.md) · Spike report: [docs/spike/phase-0.md](docs/spike/phase-0.md).
 
@@ -30,12 +32,12 @@ The app's user interface is available in German and English.
 | `crates/core` | Package format, signatures (Ed25519), checksums, publisher binding, secret detection, projects, credentials, Node.js runtime |
 | `crates/deploy` | `teleschirm-deploy`: reads `deploy.conf`, plans and runs the upload with rclone |
 | `crates/cli` | Program `website-manager`: `keygen`, `pack`, `verify`, `deploy`, `node` |
-| `apps/desktop` | Tauri app (Rust + UI in HTML/JS, German/English) |
+| `apps/desktop` | Tauri app (Rust + UI in TypeScript with Vite, German/English) |
 | `docs/formats` | Specification of `.tsweb`, manifest, `website-manager.config.json`, `deploy.conf` |
 
 ## Development
 
-Requirements: Rust (stable), Node.js (only for the Tauri CLI) and Python 3 (to fetch the bundled
+Requirements: Rust (stable), Node.js (Tauri CLI and the UI build) and Python 3 (to fetch the bundled
 programs). `npm run dev` uses PHP ≥ 8.2 and rclone from the `PATH` (or `WM_PHP`/`WM_RCLONE`);
 installers ship their own copies, fetched with `npm run sidecars` and built with
 `npm run build:release`.
@@ -43,8 +45,11 @@ installers ship their own copies, fetched with `npm run sidecars` and built with
 ```bash
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-cd apps/desktop && npm install && npm run dev
+cd apps/desktop && npm install && npm test && npm run dev
 ```
+
+`npm run ui:mock` serves the user interface with sample data in a normal browser
+(`http://127.0.0.1:1421`), without Rust; the screenshot above comes from it.
 
 The workflow `.github/workflows/build.yml` builds installers for Windows, macOS and Linux on
 GitHub (on tags `v*` or via "Run workflow"); on every push it checks formatting, Clippy and tests.

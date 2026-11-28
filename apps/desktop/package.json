@@ -7,11 +7,25 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "icons": "tauri icon assets/icon-source.png",
     "build:release": "tauri build --config src-tauri/tauri.bundle.conf.json",
-    "sidecars": "python3 ../../.github/scripts/sidecars.py fetch"
+    "sidecars": "python3 ../../.github/scripts/sidecars.py fetch",
+    "icons": "tauri icon assets/icon-source.png",
+    "ui:dev": "vite",
+    "ui:build": "tsc && vite build",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "ui:mock": "vite --mode mock --port 1421"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tabler/icons": "^3.53.0",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^22.20.7",
+    "happy-dom": "^17.6.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.5"
   }
 }

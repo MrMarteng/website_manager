@@ -7,12 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- New user interface with a sidebar: websites, sections (overview, publish, versions, edit,
+  settings), log and language. The overview shows the version on this computer and online, the
+  stored access and the next step.
+- Publishing in three steps (target and access, check changes, upload) with progress display.
+- The edit view shows all files of the version as a folder tree with a filter.
+- The app remembers the last upload per website (version, time, target).
 - Installers ship PHP 8.5 (static build with the extensions the CMS needs) and rclone 1.76 as
   `wm-php`/`wm-rclone`; customers no longer install anything. Versions and SHA-256 checksums are
   pinned in `apps/desktop/sidecars.json`, license texts ship with the app.
 
 ### Changed
 
+- The user interface is built with TypeScript and Vite; errors are shown as translated messages.
 - The bundled PHP runs the preview with `-n` (no `php.ini` of the computer). `WM_PHP` and
   `WM_RCLONE` still override the bundled programs.
 

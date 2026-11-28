@@ -3,6 +3,7 @@
 
 mod commands;
 mod deployment;
+mod error;
 mod files;
 mod keychain;
 mod overview;
@@ -21,6 +22,8 @@ pub const OPEN_EVENT: &str = "package-open-requested";
 pub const UPLOAD_EVENT: &str = "upload-progress";
 /// Event with one line of build or development server output.
 pub const BUILD_EVENT: &str = "build-progress";
+/// Event with the running preview and development server ([`commands::ServerStatus`]).
+pub const STATUS_EVENT: &str = "server-status";
 
 /// Shared state of the running app.
 #[derive(Default)]
@@ -104,6 +107,7 @@ pub fn run() {
             commands::start_preview,
             commands::stop_preview,
             commands::preview_status,
+            commands::server_status,
             commands::upload,
             commands::build_site,
             commands::start_dev,
