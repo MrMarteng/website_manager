@@ -32,7 +32,9 @@ pub struct PackageEntry {
 /// A package whose signature and checksums were verified.
 #[derive(Debug, Clone)]
 pub struct VerifiedPackage {
+    /// The signed manifest.
     pub manifest: Manifest,
+    /// Key that signed the manifest; still to be checked against the trust store.
     pub publisher: VerifyingKey,
 }
 
@@ -42,6 +44,43 @@ pub struct VerifiedPackage {
 ///
 /// # Errors
 /// Fails for unsafe or duplicate package paths and for I/O errors.
+///
+/// # Examples
+///
+/// Pack one file, then verify the package:
+///
+/// ```
+/// use std::collections::BTreeMap;
+/// use wm_core::archive::{PackageEntry, verify_package, write_package};
+/// use wm_core::manifest::Manifest;
+/// use wm_core::{FORMAT_VERSION, signing};
+///
+/// let dir = tempfile::tempdir()?;
+/// let page = dir.path().join("index.html");
+/// std::fs::write(&page, "<h1>Hello</h1>")?;
+///
+/// let manifest = Manifest {
+///     format_version: FORMAT_VERSION,
+///     name: "cafe".into(),
+///     version: "1.0.0".into(),
+///     created: "2026-11-28T08:00:00Z".into(),
+///     node_version: None,
+///     build_output: None,
+///     changelog: vec![],
+///     logo: None,
+///     has_credentials: false,
+///     files: BTreeMap::new(), // filled by write_package
+/// };
+/// let entries = [PackageEntry { package_path: "dist/index.html".into(), source: page }];
+/// let key = signing::generate_signing_key()?;
+/// let package = dir.path().join("cafe.tsweb");
+/// write_package(&package, manifest, &entries, &key)?;
+///
+/// let verified = verify_package(&package)?;
+/// assert_eq!(verified.publisher, key.verifying_key());
+/// assert!(verified.manifest.files.contains_key("dist/index.html"));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
+/// ```
 pub fn write_package(
     output: &Path,
     mut manifest: Manifest,
@@ -81,6 +120,9 @@ pub fn write_package(
 }
 
 /// Verifies signature, checksums and entry paths of a package without extracting it.
+///
+/// The returned publisher key still has to be checked against the trust store
+/// ([`crate::trust::TrustStore`]); see [`write_package`] for an example.
 ///
 /// # Errors
 /// Fails if anything about the package is not as signed.

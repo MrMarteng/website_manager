@@ -10,7 +10,9 @@ const PUBLIC_REGISTRIES: &[&str] = &["https://registry.npmjs.org/"];
 pub struct PrivatePackage {
     /// Key in `packages`, e.g. `node_modules/@scope/name`.
     pub key: String,
+    /// Package name, e.g. `@scope/name`.
     pub name: String,
+    /// Locked version.
     pub version: String,
 }
 

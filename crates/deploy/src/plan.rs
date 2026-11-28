@@ -36,7 +36,9 @@ pub enum Connection {
 /// One rclone call for one mapping.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Step {
+    /// The mapping from the `deploy.conf`.
     pub mapping: Mapping,
+    /// Effective mode: the mapping's own mode, otherwise the mode of the run.
     pub mode: MappingMode,
     /// Local source folder.
     pub source: PathBuf,

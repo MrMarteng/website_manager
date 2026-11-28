@@ -1,3 +1,6 @@
+//! Ed25519 keys: creating, storing and loading signing keys, encoding public keys and their
+//! fingerprints.
+
 use std::fs;
 use std::path::Path;
 

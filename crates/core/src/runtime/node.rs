@@ -158,7 +158,12 @@ pub fn resolve_version(spec: &str, cache_dir: &Path) -> Result<String, CoreError
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeProgress {
     /// Downloading the archive; `total` is unknown if the server sends no length.
-    Download { bytes: u64, total: Option<u64> },
+    Download {
+        /// Bytes downloaded so far.
+        bytes: u64,
+        /// Size of the archive, if the server sends it.
+        total: Option<u64>,
+    },
     /// Verifying the checksum and unpacking.
     Extract,
 }
