@@ -20,7 +20,7 @@
     "@tabler/icons": "^3.53.0",
     "@tauri-apps/cli": "^2",
     "@types/node": "^22.20.7",
-    "happy-dom": "^17.6.3",
+    "happy-dom": "^21.0.4",
     "typescript": "^5.9.3",
     "vite": "^6.4.6",
     "vitest": "^3.2.7"
