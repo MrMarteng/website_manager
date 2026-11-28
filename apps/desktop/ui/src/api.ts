@@ -81,6 +81,8 @@ export const api = {
   openWebsite: (name: string) => call<void>("open_website", { name }),
 
   readLog: () => call<string[]>("read_log"),
+  /** Stops the running rebuild/development mode start or upload; that call then fails with `cancelled`. */
+  cancelTask: (task: "build" | "upload") => call<void>("cancel_task", { task }),
   exportLog: () => call<boolean>("export_log"),
 };
 

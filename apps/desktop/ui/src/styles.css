@@ -188,7 +188,12 @@ details.expert .banner { margin: 10px 0; }
 /* Progress */
 .progress { display: grid; gap: 6px; margin-top: 12px; }
 section.card > .progress { margin-top: 0; }
+/* `hidden` must win over display rules of buttons and other components. */
+[hidden] { display: none !important; }
+.progress-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; }
 .progress-title { margin: 0; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.progress.cancelled .progress-title { color: var(--muted); }
+.progress.cancelled .progress-fill { background: var(--muted); opacity: .35; }
 .progress-title .icon { display: none; }
 .progress.failed .progress-title { color: var(--danger); }
 .progress.failed .progress-title .icon { display: inline-flex; }

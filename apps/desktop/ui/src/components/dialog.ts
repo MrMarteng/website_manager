@@ -6,6 +6,8 @@ export interface ConfirmOptions {
   title: string;
   text: string;
   confirmLabel: string;
+  /** Label of the button that closes without confirming (default "Cancel"). */
+  cancelLabel?: string;
   danger?: boolean;
 }
 
@@ -25,7 +27,7 @@ export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
     dialog.append(
       h("h2", { id: titleId }, options.title),
       h("p", {}, options.text),
-      h("div", { class: "dialog-actions" }, button(t("cancel"), () => finish(false), { variant: "ghost" }), confirm),
+      h("div", { class: "dialog-actions" }, button(options.cancelLabel ?? t("cancel"), () => finish(false), { variant: "ghost" }), confirm),
     );
     // Esc fires "cancel"; treat it like the cancel button.
     dialog.addEventListener("cancel", (event) => {

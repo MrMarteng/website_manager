@@ -1,5 +1,5 @@
 // Actions shared by several views. They update the store; views re-render from it.
-import { api } from "./api";
+import { api, toApiError } from "./api";
 import { toast } from "./components/toast";
 import { errorText, t } from "./i18n";
 import { navigate } from "./router";
@@ -11,7 +11,8 @@ export async function attempt<T>(action: () => Promise<T>): Promise<T | undefine
   try {
     return await action();
   } catch (error) {
-    toast(errorText(error), "error");
+    // A cancellation is the user's own choice, not an error.
+    if (toApiError(error).code !== "cancelled") toast(errorText(error), "error");
     return undefined;
   }
 }

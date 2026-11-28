@@ -5,6 +5,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Rebuild, start of development mode, checking changes and uploading can be cancelled from the
+  progress display. Cancelling an upload asks first, because files already transferred stay on
+  the webspace; no version file is written, so the new version is not shown as online.
+
+### Fixed
+
+- Linux: stopping development mode (or a failed start) could send the stop signal to every
+  process of the user instead of only the development server, because `kill -TERM -<group>` was
+  read as `kill(-1)` by procps. The process group is now passed after `--`.
+
 ## [0.5.0] - 2026-11-28
 
 Progress display for rebuild, development mode and publishing.

@@ -11,6 +11,7 @@ import type { Overview } from "./types";
 import { buildTree } from "./views/edit";
 import { nextStep } from "./views/overview";
 import { buildProgressView, uploadProgressView } from "./progressText";
+import { cancelProgress, failProgress, hasEnded, progressView, renderProgress, resetProgress, setProgress } from "./components/progress";
 import type { TransferStats } from "./types";
 
 const RUST_SOURCES = join(__dirname, "../../src-tauri/src");
@@ -146,5 +147,38 @@ describe("progress", () => {
     const empty = uploadProgressView({ mapping: 1, mappings: 1, dryRun: false, stats: { ...stats, totalBytes: 0, totalTransfers: 0, eta: null } });
     expect(empty.fraction).toBeNull();
     expect(empty.detail).toBe("");
+  });
+});
+
+describe("progress display", () => {
+  it("keeps the step after cancel or failure and ignores late events", () => {
+    setLanguage("en");
+    resetProgress("p", "Uploading …");
+    setProgress("p", { fraction: 0.4, detail: "1 of 3" });
+    cancelProgress("p");
+    expect(hasEnded("p")).toBe(true);
+    expect(progressView("p").title).toBe("Cancelled at: Uploading …");
+    expect(progressView("p").detail).toBe("");
+    setProgress("p", { title: "late event" });
+    expect(progressView("p").title).toBe("Cancelled at: Uploading …");
+
+    resetProgress("p", "Step 2 of 3 · Installing dependencies");
+    expect(hasEnded("p")).toBe(false);
+    failProgress("p");
+    expect(progressView("p").title).toBe("Failed at: Step 2 of 3 · Installing dependencies");
+  });
+
+  it("renders a cancel button only while running and an accessible bar", () => {
+    setLanguage("en");
+    resetProgress("q", "Building");
+    setProgress("q", { fraction: 0.25 });
+    const element = renderProgress("q", async () => true);
+    const bar = element.querySelector(".progress-bar");
+    expect(bar?.getAttribute("role")).toBe("progressbar");
+    expect(bar?.getAttribute("aria-valuenow")).toBe("25");
+    expect(element.querySelector<HTMLButtonElement>(".progress-cancel")?.hidden).toBe(false);
+    failProgress("q");
+    expect(renderProgress("q").querySelector(".progress-cancel")).toBeNull();
+    expect(renderProgress("q", async () => true).querySelector<HTMLButtonElement>(".progress-cancel")?.hidden).toBe(true);
   });
 });

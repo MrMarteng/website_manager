@@ -8,7 +8,8 @@ use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -263,8 +264,10 @@ pub fn stop_tree(child: &mut Child) {
     let id = child.id().to_string();
     #[cfg(unix)]
     {
+        // `--` is required: procps `kill` (Linux) reads `-1234` as options otherwise and ends
+        // up signalling every process of the user (`kill(-1)`).
         let group = format!("-{id}");
-        let _ = quiet(Command::new("kill").args(["-TERM", &group])).status();
+        let _ = quiet(Command::new("kill").args(["-s", "TERM", "--", &group])).status();
         let deadline = Instant::now() + STOP_GRACE;
         while Instant::now() < deadline {
             if matches!(child.try_wait(), Ok(Some(_))) {
@@ -273,7 +276,7 @@ pub fn stop_tree(child: &mut Child) {
             std::thread::sleep(Duration::from_millis(100));
         }
         // Grandchildren (e.g. PHP of the CMS) may outlive the parent; end the group for sure.
-        let _ = quiet(Command::new("kill").args(["-KILL", &group])).status();
+        let _ = quiet(Command::new("kill").args(["-s", "KILL", "--", &group])).status();
     }
     #[cfg(windows)]
     {
@@ -283,8 +286,40 @@ pub fn stop_tree(child: &mut Child) {
     let _ = child.wait();
 }
 
-/// Runs a command to completion and passes every output line to `log`.
-fn run_logged(mut command: Command, log: &mut dyn FnMut(&str)) -> Result<(), String> {
+/// Error message of a cancelled step.
+pub const CANCELLED: &str = "code:cancelled";
+/// How often a running step checks whether it was cancelled.
+const CANCEL_POLL: Duration = Duration::from_millis(100);
+
+/// Stops `child` and everything it started once `cancel` is set; ends when `finished` is set.
+fn stop_on_cancel(
+    child: Arc<Mutex<Child>>,
+    cancel: Arc<AtomicBool>,
+    finished: Arc<AtomicBool>,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        while !finished.load(Ordering::Relaxed) {
+            if cancel.load(Ordering::Relaxed) {
+                if let Ok(mut child) = child.lock() {
+                    stop_tree(&mut child);
+                }
+                break;
+            }
+            std::thread::sleep(CANCEL_POLL);
+        }
+    })
+}
+
+/// Runs a command to completion and passes every output line to `log`. Setting `cancel`
+/// stops it (with everything it started) and returns [`CANCELLED`].
+fn run_logged(
+    mut command: Command,
+    log: &mut dyn FnMut(&str),
+    cancel: &Arc<AtomicBool>,
+) -> Result<(), String> {
+    if cancel.load(Ordering::Relaxed) {
+        return Err(CANCELLED.into());
+    }
     own_process_group(&mut command);
     let mut child = command
         .stdin(Stdio::null())
@@ -314,11 +349,27 @@ fn run_logged(mut command: Command, log: &mut dyn FnMut(&str)) -> Result<(), Str
         });
     }
     drop(sender);
+    let child = Arc::new(Mutex::new(child));
+    let finished = Arc::new(AtomicBool::new(false));
+    let watcher = stop_on_cancel(
+        Arc::clone(&child),
+        Arc::clone(cancel),
+        Arc::clone(&finished),
+    );
+    // Ends when the process (and everything holding its output open) has ended.
     for line in receiver {
         log(&strip_ansi(&line));
     }
-    let status = child.wait().map_err(|e| e.to_string())?;
-    if status.success() {
+    finished.store(true, Ordering::Relaxed);
+    let _ = watcher.join();
+    let status = child
+        .lock()
+        .map_err(|_| "process state unavailable".to_owned())?
+        .wait()
+        .map_err(|e| e.to_string())?;
+    if cancel.load(Ordering::Relaxed) {
+        Err(CANCELLED.into())
+    } else if status.success() {
         Ok(())
     } else {
         Err(format!("code:command-failed {status}"))
@@ -355,6 +406,7 @@ pub fn ensure_dependencies(
     runtime: &NodeRuntime,
     log: &mut dyn FnMut(&str),
     progress: &mut dyn FnMut(BuildProgress),
+    cancel: &Arc<AtomicBool>,
 ) -> Result<(), String> {
     let installed = project.join("node_modules/.package-lock.json");
     let lockfile = project.join("package-lock.json");
@@ -375,7 +427,7 @@ pub fn ensure_dependencies(
         .args(["ci", "--ignore-scripts", "--no-audit", "--no-fund"])
         .current_dir(project)
         .envs(command_env(runtime));
-    run_logged(command, log)
+    run_logged(command, log, cancel)
 }
 
 fn script_command(
@@ -405,9 +457,10 @@ pub fn build(
     runtime: &NodeRuntime,
     log: &mut dyn FnMut(&str),
     progress: &mut dyn FnMut(BuildProgress),
+    cancel: &Arc<AtomicBool>,
 ) -> Result<(), String> {
     let project = version_folder.join("project");
-    ensure_dependencies(&project, runtime, log, progress)?;
+    ensure_dependencies(&project, runtime, log, progress, cancel)?;
     let script = read_script(&project, "build")?;
     progress(BuildProgress::step(BuildStep::Build));
     log(&format!(
@@ -415,7 +468,7 @@ pub fn build(
         script.program,
         script.args.join(" ")
     ));
-    run_logged(script_command(&project, runtime, &script)?, log)?;
+    run_logged(script_command(&project, runtime, &script)?, log, cancel)?;
 
     let output = project.join(build_output);
     if !output.join("index.html").is_file() {
@@ -482,9 +535,10 @@ pub fn start_dev(
     runtime: &NodeRuntime,
     log: impl Fn(&str) + Send + 'static,
     progress: &mut dyn FnMut(BuildProgress),
+    cancel: &Arc<AtomicBool>,
 ) -> Result<DevServer, String> {
     let project = version_folder.join("project");
-    ensure_dependencies(&project, runtime, &mut |line| log(line), progress)?;
+    ensure_dependencies(&project, runtime, &mut |line| log(line), progress, cancel)?;
     let mut script = read_script(&project, "dev")?;
     progress(BuildProgress::step(BuildStep::DevStart));
     if script.program == "astro" && script.args.first().is_some_and(|arg| arg == "dev") {
@@ -530,11 +584,19 @@ pub fn start_dev(
 
     let deadline = Instant::now() + DEV_START_TIMEOUT;
     let url = loop {
+        if cancel.load(Ordering::Relaxed) {
+            stop_tree(&mut child);
+            return Err(CANCELLED.into());
+        }
         let remaining = deadline.saturating_duration_since(Instant::now());
         // A closed channel (server ended) or the timeout both mean the start failed.
-        let Ok(raw) = receiver.recv_timeout(remaining) else {
-            stop_tree(&mut child);
-            return Err("code:dev-start-failed".into());
+        let raw = match receiver.recv_timeout(remaining.min(CANCEL_POLL)) {
+            Ok(raw) => raw,
+            Err(mpsc::RecvTimeoutError::Timeout) if !remaining.is_zero() => continue,
+            Err(_) => {
+                stop_tree(&mut child);
+                return Err("code:dev-start-failed".into());
+            }
         };
         let line = strip_ansi(&raw);
         log(&line);
@@ -557,6 +619,33 @@ pub fn start_dev(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn running_commands_stop_when_cancelled() {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let trigger = Arc::clone(&cancel);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            trigger.store(true, Ordering::Relaxed);
+        });
+        let started = Instant::now();
+        let mut command = Command::new("sh");
+        // A child that would run for a minute, started by a shell: the whole group must end.
+        command.args(["-c", "sleep 60 & wait"]);
+        let result = run_logged(command, &mut |_| {}, &cancel);
+        assert_eq!(result, Err(CANCELLED.to_owned()));
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "{:?}",
+            started.elapsed()
+        );
+        // Already cancelled: nothing starts.
+        assert_eq!(
+            run_logged(Command::new("does-not-exist"), &mut |_| {}, &cancel),
+            Err(CANCELLED.to_owned())
+        );
+    }
 
     #[test]
     fn progress_events_have_stable_names() {

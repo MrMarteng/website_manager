@@ -9,6 +9,13 @@ export const en: Record<TextKey, string> = {
   working: "Please wait …",
   progressLabel: "Progress",
   failedAt: "Failed at: {step}",
+  cancelledAt: "Cancelled at: {step}",
+  cancelling: "Cancelling …",
+  cancelUploadTitle: "Cancel the upload?",
+  cancelUploadText:
+    "Files already transferred stay on the webspace. The website may then be partly updated until you upload again.",
+  cancelUploadAction: "Cancel upload",
+  cancelUploadKeep: "Keep uploading",
   stepOf: "Step {number} of {total} · {label}",
   stepNodeDownload: "Downloading Node.js",
   stepNodeExtract: "Verifying and unpacking Node.js",
@@ -186,4 +193,5 @@ export const en: Record<TextKey, string> = {
   "code:command-failed": "The step failed ({detail}). See the log for details.",
   "code:build-output-missing": "The build did not produce a website in “{detail}”.",
   "code:dev-start-failed": "Development mode did not start. See the log for details.",
+  "code:cancelled": "Cancelled.",
 };

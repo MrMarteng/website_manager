@@ -3,6 +3,9 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
@@ -59,13 +62,36 @@ pub struct UploadProgress {
 pub struct Runner {
     rclone: PathBuf,
     dry_run: bool,
+    cancel: Option<Arc<AtomicBool>>,
 }
+
+/// How often a running rclone checks whether the run was cancelled.
+const CANCEL_POLL: Duration = Duration::from_millis(100);
 
 impl Runner {
     /// A runner using the given rclone program; with `dry_run` nothing changes on the server.
     #[must_use]
     pub fn new(rclone: PathBuf, dry_run: bool) -> Self {
-        Self { rclone, dry_run }
+        Self {
+            rclone,
+            dry_run,
+            cancel: None,
+        }
+    }
+
+    /// Makes the run cancellable: once `flag` is set, the running rclone is stopped, no further
+    /// mapping starts, no version file is written and the run fails with
+    /// [`DeployError::Cancelled`].
+    #[must_use]
+    pub fn with_cancel(mut self, flag: Arc<AtomicBool>) -> Self {
+        self.cancel = Some(flag);
+        self
+    }
+
+    fn cancelled(&self) -> bool {
+        self.cancel
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Relaxed))
     }
 
     /// Reads the version file from the server; `None` if there is none yet.
@@ -136,6 +162,9 @@ impl Runner {
         let mut failed = 0;
 
         for (index, step) in steps.iter().enumerate() {
+            if self.cancelled() {
+                return Err(DeployError::Cancelled);
+            }
             let mut report = |stats: TransferStats| {
                 progress(&UploadProgress {
                     mapping: index + 1,
@@ -192,6 +221,10 @@ impl Runner {
                 LogEvent::Text(text) => log(&format!("    {text}")),
             };
             let succeeded = self.stream(config, connection, &args, &mut on_line)?;
+            if self.cancelled() {
+                log("    cancelled");
+                return Err(DeployError::Cancelled);
+            }
             for line in last_stats.lines().filter(|line| !line.trim().is_empty()) {
                 log(&format!("    {line}"));
             }
@@ -209,6 +242,9 @@ impl Runner {
                 failed,
                 total: summary.total,
             });
+        }
+        if self.cancelled() {
+            return Err(DeployError::Cancelled);
         }
         if !self.dry_run
             && let (Some(stamp), Some(root)) = (stamp, site_root(config))
@@ -289,13 +325,38 @@ impl Runner {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|source| self.start_error(source))?;
+        let stderr = child.stderr.take();
+        let child = Arc::new(Mutex::new(child));
+        let finished = Arc::new(AtomicBool::new(false));
+        // Stops rclone when the run is cancelled; ending it also closes stderr below.
+        let watcher = self.cancel.clone().map(|cancel| {
+            let child = Arc::clone(&child);
+            let finished = Arc::clone(&finished);
+            std::thread::spawn(move || {
+                while !finished.load(Ordering::Relaxed) {
+                    if cancel.load(Ordering::Relaxed) {
+                        if let Ok(mut child) = child.lock() {
+                            let _ = child.kill();
+                        }
+                        break;
+                    }
+                    std::thread::sleep(CANCEL_POLL);
+                }
+            })
+        });
         // rclone writes its log, including the statistics, to stderr.
-        if let Some(stderr) = child.stderr.take() {
+        if let Some(stderr) = stderr {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
                 on_line(&line);
             }
         }
+        finished.store(true, Ordering::Relaxed);
+        if let Some(watcher) = watcher {
+            let _ = watcher.join();
+        }
         let status = child
+            .lock()
+            .map_err(|_| DeployError::RcloneFailed("rclone process state unavailable".into()))?
             .wait()
             .map_err(|e| DeployError::RcloneFailed(e.to_string()))?;
         Ok(status.success())

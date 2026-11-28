@@ -60,13 +60,21 @@ const files: FileEntry[] = [
 
 let preview: string | null = null;
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+let cancelled = false;
+const CANCELLED = { code: "cancelled", detail: "" };
+
+/** Waits, then fails like Rust does if the task was cancelled meanwhile. */
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  if (cancelled) throw CANCELLED;
+}
 
 /** Plays upload statistics like rclone sends them, one per 400 ms. */
 async function playUpload(dryRun: boolean): Promise<void> {
+  cancelled = false;
   const totalBytes = 178_898;
-  for (let tick = 0; tick <= 5; tick += 1) {
-    const share = tick / 5;
+  for (let tick = 0; tick <= 10; tick += 1) {
+    const share = tick / 10;
     const progress: UploadProgress = {
       mapping: 2,
       mappings: 2,
@@ -78,7 +86,7 @@ async function playUpload(dryRun: boolean): Promise<void> {
         totalTransfers: dryRun ? 0 : 3,
         checks: Math.round(40 * share),
         totalChecks: 40,
-        eta: dryRun || tick === 5 ? null : 5 - tick,
+        eta: dryRun || tick === 10 ? null : 10 - tick,
         speed: 40_000,
         errors: 0,
       },
@@ -91,6 +99,7 @@ async function playUpload(dryRun: boolean): Promise<void> {
 
 /** Plays a first build: Node.js download, unpacking, npm ci, astro build. */
 async function playBuild(lastStep: "build" | "dev-start"): Promise<void> {
+  cancelled = false;
   const total = 48_000_000;
   for (let bytes = 0; bytes <= total; bytes += 8_000_000) {
     await emit("build-progress", { step: "node-download", current: bytes, total } satisfies BuildProgress);
@@ -143,6 +152,9 @@ mockIPC((command, args) => {
             }),
           ),
       );
+    case "cancel_task":
+      cancelled = true;
+      return null;
     case "read_log":
       return ["open package cafe-windows.tsweb", "package ok: cafe-glueckseelig 2026.11.30 (Known)"];
     default:

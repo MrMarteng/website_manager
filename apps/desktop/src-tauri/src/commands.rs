@@ -2,6 +2,8 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -411,6 +413,8 @@ pub async fn upload(
     let project_name = name.clone();
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
+    state.cancel_upload.store(false, Ordering::Relaxed);
+    let cancel = Arc::clone(&state.cancel_upload);
     let result = tauri::async_runtime::spawn_blocking(move || {
         deployment::run(
             &folder,
@@ -424,6 +428,7 @@ pub async fn upload(
             &mut |progress| {
                 let _ = emitter.emit(UPLOAD_PROGRESS_EVENT, progress);
             },
+            &cancel,
         )
     })
     .await
@@ -523,6 +528,20 @@ pub fn open_website(app: AppHandle, name: String) -> Result<(), CommandError> {
         .map_err(|e| CommandError::from(e.to_string()))
 }
 
+/// Cancels the running rebuild or development mode start (`build`) or upload (`upload`).
+/// The cancelled command then fails with `code:cancelled`.
+#[tauri::command]
+pub fn cancel_task(state: State<'_, AppState>, task: String) -> Result<(), CommandError> {
+    let flag = match task.as_str() {
+        "build" => &state.cancel_build,
+        "upload" => &state.cancel_upload,
+        _ => return Err(CommandError::from(format!("unknown task {task}"))),
+    };
+    flag.store(true, Ordering::Relaxed);
+    state.log(format!("{task} cancelled by the user"));
+    Ok(())
+}
+
 /// The expert log.
 #[tauri::command]
 pub fn read_log(state: State<'_, AppState>) -> Vec<String> {
@@ -559,6 +578,7 @@ fn node_for(
     app: &AppHandle,
     name: &str,
     progress: &mut dyn FnMut(site::BuildProgress),
+    cancel: &AtomicBool,
 ) -> Result<
     (
         PathBuf,
@@ -576,11 +596,16 @@ fn node_for(
         .node_version
         .clone()
         .unwrap_or_else(|| site::DEFAULT_NODE_VERSION.to_owned());
-    let runtime =
-        wm_core::runtime::node::ensure_with_progress(&version, &node_cache(app)?, &mut |stage| {
-            progress(stage.into());
-        })
-        .map_err(|e| e.to_string())?;
+    let runtime = wm_core::runtime::node::ensure_with_progress(
+        &version,
+        &node_cache(app)?,
+        &mut |stage| progress(stage.into()),
+        cancel,
+    )
+    .map_err(|e| match e {
+        wm_core::CoreError::Cancelled => site::CANCELLED.to_owned(),
+        other => other.to_string(),
+    })?;
     Ok((store.version_dir(name, &record.current), manifest, runtime))
 }
 
@@ -632,6 +657,8 @@ pub async fn build_site(
     let emitter = app.clone();
     let worker_app = app.clone();
     let project = name.clone();
+    state.cancel_build.store(false, Ordering::Relaxed);
+    let cancel = Arc::clone(&state.cancel_build);
     let result = tauri::async_runtime::spawn_blocking(move || {
         let mut emit = |line: &str| {
             crate::push_log(&log, line);
@@ -641,9 +668,9 @@ pub async fn build_site(
             let _ = emitter.emit(BUILD_PROGRESS_EVENT, progress);
         };
         emit("preparing Node.js …");
-        let (folder, manifest, runtime) = node_for(&worker_app, &project, &mut progress)?;
+        let (folder, manifest, runtime) = node_for(&worker_app, &project, &mut progress, &cancel)?;
         let output = manifest.build_output.as_deref().unwrap_or("dist");
-        site::build(&folder, output, &runtime, &mut emit, &mut progress)
+        site::build(&folder, output, &runtime, &mut emit, &mut progress, &cancel)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -667,6 +694,8 @@ pub async fn start_dev(
     let emitter = app.clone();
     let worker_app = app.clone();
     let project = name.clone();
+    state.cancel_build.store(false, Ordering::Relaxed);
+    let cancel = Arc::clone(&state.cancel_build);
     let server = tauri::async_runtime::spawn_blocking(move || {
         let progress_emitter = emitter.clone();
         let mut progress = move |progress: site::BuildProgress| {
@@ -677,8 +706,8 @@ pub async fn start_dev(
             let _ = emitter.emit(BUILD_LINE_EVENT, line);
         };
         emit("preparing Node.js …");
-        let (folder, _, runtime) = node_for(&worker_app, &project, &mut progress)?;
-        site::start_dev(&folder, &project, &runtime, emit, &mut progress)
+        let (folder, _, runtime) = node_for(&worker_app, &project, &mut progress, &cancel)?;
+        site::start_dev(&folder, &project, &runtime, emit, &mut progress, &cancel)
     })
     .await
     .map_err(|e| e.to_string())??;

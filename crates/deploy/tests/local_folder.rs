@@ -5,9 +5,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use teleschirm_deploy::{
-    Connection, DeployConfig, MappingMode, Runner, VERSION_FILE, VersionStamp,
+    Connection, DeployConfig, DeployError, MappingMode, Runner, VERSION_FILE, VersionStamp,
 };
 
 fn rclone() -> Option<PathBuf> {
@@ -153,4 +155,56 @@ fn seed_fills_empty_target() {
         runner.read_server_version(&config, &connection).unwrap(),
         None
     );
+}
+
+#[test]
+fn cancelled_run_stops_and_writes_no_version_file() {
+    let Some(rclone) = rclone() else {
+        eprintln!("rclone not found – test skipped");
+        return;
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().join("project");
+    let server = dir.path().join("server");
+    for index in 0..50 {
+        write(&project.join(format!("dist/page-{index}.html")), "seite");
+    }
+    write(
+        &project.join("dist/backend/data/news.json"),
+        "beispieldaten",
+    );
+    write(&server.join("site/backend/data/news.json"), "live-daten");
+    let mut config = DeployConfig::parse(CONFIG, &project).unwrap();
+    config.base_dir.clone_from(&project);
+    let connection = Connection::LocalFolder(server.clone());
+    let stamp = VersionStamp {
+        name: "cafe".into(),
+        version: "2".into(),
+        created: "2026-11-28T08:00:00Z".into(),
+    };
+    let cancel = Arc::new(AtomicBool::new(false));
+    let runner = Runner::new(rclone, false).with_cancel(Arc::clone(&cancel));
+    // Cancel as soon as rclone reports its first file, i.e. while it runs.
+    let error = runner
+        .run(
+            &config,
+            MappingMode::Sync,
+            &connection,
+            Some(&stamp),
+            &mut |line| {
+                if line.contains("INFO:") || line.contains("NOTICE:") {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            },
+        )
+        .unwrap_err();
+    assert!(matches!(error, DeployError::Cancelled), "{error}");
+    assert!(!server.join("site").join(VERSION_FILE).exists());
+
+    // Cancelled before the start: nothing runs at all.
+    let error = Runner::new(PathBuf::from("does-not-exist"), false)
+        .with_cancel(Arc::new(AtomicBool::new(true)))
+        .run(&config, MappingMode::Sync, &connection, None, &mut |_| {})
+        .unwrap_err();
+    assert!(matches!(error, DeployError::Cancelled), "{error}");
 }
