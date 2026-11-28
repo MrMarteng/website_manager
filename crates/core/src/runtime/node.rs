@@ -3,6 +3,7 @@
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::Platform;
 use crate::CoreError;
@@ -175,18 +176,20 @@ pub enum NodeProgress {
 /// Fails if the version cannot be resolved, the download fails, the checksum does not match or
 /// extraction fails.
 pub fn ensure(spec: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError> {
-    ensure_with_progress(spec, cache_dir, &mut |_| {})
+    ensure_with_progress(spec, cache_dir, &mut |_| {}, &AtomicBool::new(false))
 }
 
 /// Like [`ensure`]; reports download and extraction to `progress`. Nothing is reported when
-/// the runtime is already cached.
+/// the runtime is already cached. Setting `cancel` stops the download; the partial archive is
+/// removed and the cache stays as it was.
 ///
 /// # Errors
-/// As [`ensure`].
+/// As [`ensure`]; [`CoreError::Cancelled`] after `cancel` was set.
 pub fn ensure_with_progress(
     spec: &str,
     cache_dir: &Path,
     progress: &mut dyn FnMut(NodeProgress),
+    cancel: &AtomicBool,
 ) -> Result<NodeRuntime, CoreError> {
     let version = resolve_version(spec, cache_dir)?;
     let version = version.as_str();
@@ -210,7 +213,14 @@ pub fn ensure_with_progress(
 
     let archive_url = format!("{DIST_URL}/v{version}/{archive}");
     let archive_path = cache_dir.join(format!("{archive}.download"));
-    download_file(&archive_url, &archive_path, progress)?;
+    if let Err(error) = download_file(&archive_url, &archive_path, progress, cancel) {
+        let _ = fs::remove_file(&archive_path);
+        return Err(error);
+    }
+    if cancel.load(Ordering::Relaxed) {
+        let _ = fs::remove_file(&archive_path);
+        return Err(CoreError::Cancelled);
+    }
     progress(NodeProgress::Extract);
     let actual = sha256_file(&archive_path)?;
     if actual != expected {
@@ -295,6 +305,7 @@ fn download_file(
     url: &str,
     target: &Path,
     progress: &mut dyn FnMut(NodeProgress),
+    cancel: &AtomicBool,
 ) -> Result<(), CoreError> {
     let response = ureq::get(url).call().map_err(|e| CoreError::Download {
         url: url.to_owned(),
@@ -303,21 +314,28 @@ fn download_file(
     let total = response.body().content_length();
     let mut reader = response.into_body().into_reader();
     let mut file = File::create(target).map_err(|e| CoreError::io(target, e))?;
-    copy_with_progress(&mut reader, &mut file, total, progress)
-        .map_err(|e| CoreError::io(target, e))?;
-    Ok(())
+    match copy_with_progress(&mut reader, &mut file, total, progress, cancel) {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err(CoreError::Cancelled),
+        Err(error) => Err(CoreError::io(target, error)),
+    }
 }
 
+/// Copies `reader` to `writer`; `None` if `cancel` was set before the end.
 fn copy_with_progress(
     reader: &mut dyn Read,
     writer: &mut dyn Write,
     total: Option<u64>,
     progress: &mut dyn FnMut(NodeProgress),
-) -> io::Result<u64> {
+    cancel: &AtomicBool,
+) -> io::Result<Option<u64>> {
     let mut buffer = vec![0; 64 * 1024];
     let (mut bytes, mut reported) = (0_u64, 0_u64);
     progress(NodeProgress::Download { bytes, total });
     loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
         let read = match reader.read(&mut buffer) {
             Ok(0) => break,
             Ok(read) => read,
@@ -334,7 +352,7 @@ fn copy_with_progress(
     if reported != bytes {
         progress(NodeProgress::Download { bytes, total });
     }
-    Ok(bytes)
+    Ok(Some(bytes))
 }
 
 fn extract_tar_gz(archive: &Path, target: &Path) -> Result<(), CoreError> {
@@ -383,9 +401,14 @@ mod tests {
         let mut copy = Vec::new();
         let mut reports = Vec::new();
         let total = Some(data.len() as u64);
-        let copied = copy_with_progress(&mut data.as_slice(), &mut copy, total, &mut |p| {
-            reports.push(p);
-        })
+        let copied = copy_with_progress(
+            &mut data.as_slice(),
+            &mut copy,
+            total,
+            &mut |p| reports.push(p),
+            &AtomicBool::new(false),
+        )
+        .unwrap()
         .unwrap();
         assert_eq!(copied, data.len() as u64);
         assert_eq!(copy, data);
@@ -402,6 +425,27 @@ mod tests {
         );
         // 600 KiB in 256 KiB steps: start, 2 steps, end.
         assert_eq!(reports.len(), 4);
+    }
+
+    #[test]
+    fn download_stops_when_cancelled() {
+        let data = vec![7_u8; 600 * 1024];
+        let cancel = AtomicBool::new(false);
+        let mut copy = Vec::new();
+        let result = copy_with_progress(
+            &mut data.as_slice(),
+            &mut copy,
+            None,
+            &mut |progress| {
+                if matches!(progress, NodeProgress::Download { bytes, .. } if bytes > 0) {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+            },
+            &cancel,
+        )
+        .unwrap();
+        assert_eq!(result, None);
+        assert!(copy.len() < data.len(), "stopped before the end");
     }
 
     const MAC: Platform = Platform {

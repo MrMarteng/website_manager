@@ -2,7 +2,15 @@
 import { attempt, setOverview } from "../actions";
 import { api, events, toApiError } from "../api";
 import { confirmDialog } from "../components/dialog";
-import { clearProgress, failProgress, hasFailed, renderProgress, resetProgress, setProgress } from "../components/progress";
+import {
+  cancelProgress,
+  clearProgress,
+  failProgress,
+  hasEnded,
+  renderProgress,
+  resetProgress,
+  setProgress,
+} from "../components/progress";
 import { toast } from "../components/toast";
 import { button, h, icon } from "../dom";
 import { errorText, t } from "../i18n";
@@ -56,6 +64,26 @@ export function listenToUploadLines(): void {
   void events.onUploadProgress((progress) => setProgress(PROGRESS_ID, uploadProgressView(progress)));
 }
 
+/** Asks before stopping a real upload (the webspace may be left half updated). */
+async function cancelUpload(): Promise<boolean> {
+  const name = state.project?.name;
+  const realUpload = name !== undefined && publishState(name).phase === "upload";
+  if (
+    realUpload &&
+    !(await confirmDialog({
+      title: t("cancelUploadTitle"),
+      text: t("cancelUploadText"),
+      confirmLabel: t("cancelUploadAction"),
+      cancelLabel: t("cancelUploadKeep"),
+      danger: true,
+    }))
+  ) {
+    return false;
+  }
+  await attempt(() => api.cancelTask("upload"));
+  return true;
+}
+
 function request(form: PublishState, dryRun: boolean): UploadRequest {
   return {
     target: form.kind === "server" ? { kind: "server", password: form.password || null } : { kind: "localFolder", folder: form.folder },
@@ -88,8 +116,13 @@ async function run(project: Overview, form: PublishState, dryRun: boolean): Prom
       form.allowOlder = true;
       return run(project, form, dryRun);
     }
-    failProgress(PROGRESS_ID);
-    toast(errorText(apiError), "error");
+    if (apiError.code === "cancelled") cancelProgress(PROGRESS_ID);
+    else {
+      failProgress(PROGRESS_ID);
+      toast(errorText(apiError), "error");
+    }
+    // The view was redrawn when the run ended; show the final state.
+    update({});
     return undefined;
   }
 }
@@ -217,7 +250,7 @@ export function renderPublish(project: Overview): HTMLElement {
   };
 
   const progressFor = (phase: PublishState["phase"]) =>
-    form.phase === phase && (busy || hasFailed(PROGRESS_ID)) ? renderProgress(PROGRESS_ID) : null;
+    form.phase === phase && (busy || hasEnded(PROGRESS_ID)) ? renderProgress(PROGRESS_ID, cancelUpload) : null;
 
   const checkResult = form.check
     ? h(

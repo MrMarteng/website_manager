@@ -5,6 +5,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Rebuild, start of development mode, checking changes and uploading can be cancelled from the
+  progress display. Cancelling an upload asks first, because files already transferred stay on
+  the webspace; no version file is written, so the new version is not shown as online.
+
 ## [0.5.0] - 2026-11-28
 
 Progress display for rebuild, development mode and publishing.

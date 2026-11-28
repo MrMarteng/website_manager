@@ -12,6 +12,7 @@ mod site;
 mod tools;
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
@@ -40,6 +41,10 @@ pub struct AppState {
     pub log: Arc<Mutex<Vec<String>>>,
     /// Packages handed over before the window asked for them.
     pub pending_open: Mutex<Vec<PathBuf>>,
+    /// Set to cancel the running rebuild or start of development mode.
+    pub cancel_build: Arc<AtomicBool>,
+    /// Set to cancel the running upload or check.
+    pub cancel_upload: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -129,6 +134,7 @@ pub fn run() {
             commands::open_website,
             commands::read_log,
             commands::export_log,
+            commands::cancel_task,
         ])
         .build(tauri::generate_context!());
 

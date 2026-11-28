@@ -7,6 +7,13 @@ export const de = {
   working: "Bitte warten …",
   progressLabel: "Fortschritt",
   failedAt: "Fehlgeschlagen bei: {step}",
+  cancelledAt: "Abgebrochen bei: {step}",
+  cancelling: "Wird abgebrochen …",
+  cancelUploadTitle: "Hochladen abbrechen?",
+  cancelUploadText:
+    "Bereits übertragene Dateien bleiben auf dem Webspace. Die Website kann dann teilweise aktualisiert sein, bis Sie erneut hochladen.",
+  cancelUploadAction: "Hochladen abbrechen",
+  cancelUploadKeep: "Weiter hochladen",
   stepOf: "Schritt {number} von {total} · {label}",
   stepNodeDownload: "Node.js laden",
   stepNodeExtract: "Node.js prüfen und entpacken",
@@ -184,6 +191,7 @@ export const de = {
   "code:command-failed": "Der Vorgang ist fehlgeschlagen ({detail}). Details stehen im Protokoll.",
   "code:build-output-missing": "Der Build hat keine Website in „{detail}“ erzeugt.",
   "code:dev-start-failed": "Der Entwicklungsmodus ist nicht gestartet. Details stehen im Protokoll.",
+  "code:cancelled": "Abgebrochen.",
 } as const;
 
 export type TextKey = keyof typeof de;

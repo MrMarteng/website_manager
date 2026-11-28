@@ -4,6 +4,8 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use serde::{Deserialize, Serialize};
 use teleschirm_deploy::{
@@ -151,6 +153,7 @@ pub fn run(
     request: UploadRequest,
     emit: &mut dyn FnMut(&str),
     progress: &mut dyn FnMut(&UploadProgress),
+    cancel: &Arc<AtomicBool>,
 ) -> Result<UploadResult, String> {
     let manifest = read_manifest_copy(folder).map_err(|e| e.to_string())?;
     let (mut config, pinned) = effective_config(folder, settings)?;
@@ -189,7 +192,7 @@ pub fn run(
         rclone.source.label(),
         rclone.program.display()
     ));
-    let runner = Runner::new(rclone.program, request.dry_run);
+    let runner = Runner::new(rclone.program, request.dry_run).with_cancel(Arc::clone(cancel));
     if let Some(on_server) = runner
         .read_server_version(&config, &connection)
         .map_err(|e| e.to_string())?
@@ -220,7 +223,10 @@ pub fn run(
             emit,
             progress,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| match e {
+            teleschirm_deploy::DeployError::Cancelled => crate::site::CANCELLED.to_owned(),
+            other => other.to_string(),
+        })?;
     let mut uploaded = summary.uploaded;
     let mut deleted = summary.deleted;
     let (uploaded_count, deleted_count) = (uploaded.len(), deleted.len());
@@ -350,6 +356,7 @@ mod tests {
                 lines.push(line.to_owned());
             },
             &mut |progress| reports.push(*progress),
+            &Arc::new(AtomicBool::new(false)),
         )
         .unwrap();
         assert!(
@@ -377,6 +384,7 @@ mod tests {
             request(false),
             &mut |_| {},
             &mut |_| {},
+            &Arc::new(AtomicBool::new(false)),
         )
         .unwrap_err();
         assert!(error.starts_with("code:newer-on-server"), "{error}");
@@ -387,7 +395,8 @@ mod tests {
                 &ProjectSettings::default(),
                 request(true),
                 &mut |_| {},
-                &mut |_| {}
+                &mut |_| {},
+                &Arc::new(AtomicBool::new(false))
             )
             .is_ok()
         );
@@ -417,6 +426,7 @@ mod tests {
             request,
             &mut |_| {},
             &mut |_| {},
+            &Arc::new(AtomicBool::new(false)),
         )
         .unwrap_err();
         assert!(error.starts_with("code:unverified-host"), "{error}");

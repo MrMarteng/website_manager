@@ -87,6 +87,9 @@ pub enum CoreError {
     /// Decrypting the credentials failed: wrong password or modified file.
     #[error("wrong package password, or the credentials were changed")]
     WrongPassword,
+    /// The user cancelled the operation; partial downloads were removed.
+    #[error("cancelled")]
+    Cancelled,
     /// The operating system's random number generator failed.
     #[error("random number generator failed: {0}")]
     Random(String),

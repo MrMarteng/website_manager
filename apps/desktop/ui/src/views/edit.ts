@@ -1,10 +1,18 @@
 // Edit: rebuild, development mode and the files of the version as a tree.
 import { attempt, setOverview } from "../actions";
-import { api, events } from "../api";
-import { clearProgress, failProgress, hasFailed, renderProgress, resetProgress, setProgress } from "../components/progress";
+import { api, events, toApiError } from "../api";
+import {
+  cancelProgress,
+  clearProgress,
+  failProgress,
+  hasEnded,
+  renderProgress,
+  resetProgress,
+  setProgress,
+} from "../components/progress";
 import { toast } from "../components/toast";
 import { button, h, icon } from "../dom";
-import { formatSize, t } from "../i18n";
+import { errorText, formatSize, t } from "../i18n";
 import { buildProgressView } from "../progressText";
 import { state, update, whileBusy } from "../store";
 import type { FileEntry, Overview } from "../types";
@@ -59,13 +67,28 @@ export function listenToBuildLines(): void {
 async function withProgress<T>(project: Overview, mode: "build" | "dev", action: () => Promise<T>): Promise<T | undefined> {
   progressRun = { mode, project: project.name };
   resetProgress(PROGRESS_ID);
-  const result = await whileBusy(mode, () => attempt(action));
-  if (result === undefined) failProgress(PROGRESS_ID);
-  else {
+  try {
+    const result = await whileBusy(mode, action);
     clearProgress(PROGRESS_ID);
     progressRun = null;
+    return result;
+  } catch (error) {
+    const apiError = toApiError(error);
+    if (apiError.code === "cancelled") {
+      cancelProgress(PROGRESS_ID);
+    } else {
+      failProgress(PROGRESS_ID);
+      toast(errorText(apiError), "error");
+    }
+    // The view was redrawn when the run ended; show the final state.
+    update({});
+    return undefined;
   }
-  return result;
+}
+
+async function cancelBuild(): Promise<boolean> {
+  await attempt(() => api.cancelTask("build"));
+  return true;
 }
 
 function fileButton(project: Overview, entry: FileEntry, label: string): HTMLElement {
@@ -148,8 +171,8 @@ async function toggleDev(project: Overview): Promise<void> {
 
 export function renderEdit(project: Overview): HTMLElement {
   const building = state.busy.has("build") || state.busy.has("dev");
-  const showProgress = building || (hasFailed(PROGRESS_ID) && progressRun?.project === project.name);
-  const progress = showProgress ? h("section", { class: "card" }, renderProgress(PROGRESS_ID)) : null;
+  const showProgress = building || (hasEnded(PROGRESS_ID) && progressRun?.project === project.name);
+  const progress = showProgress ? h("section", { class: "card" }, renderProgress(PROGRESS_ID, cancelBuild)) : null;
 
   const tree = h("div", { class: "tree-container" });
   const search = h("input", {

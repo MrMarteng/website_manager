@@ -53,6 +53,9 @@ pub enum DeployError {
         /// Number of mappings in the run.
         total: usize,
     },
+    /// The run was cancelled; mappings may be partly uploaded, no version file was written.
+    #[error("cancelled")]
+    Cancelled,
     /// The version file on the server exists but is not valid.
     #[error("version file on the server is unreadable: {0}")]
     VersionFile(String),

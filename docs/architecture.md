@@ -64,7 +64,7 @@ Dependencies only point downwards; `core` and `deploy` do not know each other.
 | `teleschirm-deploy` | upload | `config` (`deploy.conf` parser, change of the target folder), `plan` (rclone arguments per mapping), `runner` (execution, seed check, version file), `changes` (reads rclone's JSON log: uploaded/deleted files, transfer statistics, log text) |
 | `website-manager` (CLI) | agency tool | `keygen`, `pack` (positive list, cleaned `deploy.conf`, host keys, encrypted credentials, `vendor`: private npm packages as tarballs), `verify`, `deploy`, `node` |
 | `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode, build steps), `preview` + `router.php`, `error` (`CommandError` with `code` and `detail` for the UI), `tools` (locating PHP/rclone: `WM_PHP`/`WM_RCLONE`, then the bundled `wm-php`/`wm-rclone`, then the `PATH`); `lib` accepts packages by double-click, second app start and drag and drop |
-| `apps/desktop/ui` | web view | TypeScript + Vite, no framework: `api` (typed commands and events: upload/build lines and progress, `server-status`), `components/progress` (step, bar, details), `store`, `router` (hash routes per website and section), `views/` (overview, publish, versions, edit with file tree, settings, log), `i18n/` (German/English, error codes) |
+| `apps/desktop/ui` | web view | TypeScript + Vite, no framework: `api` (typed commands and events: upload/build lines and progress, `server-status`), `components/progress` (step, bar, details, cancel), `store`, `router` (hash routes per website and section), `views/` (overview, publish, versions, edit with file tree, settings, log), `i18n/` (German/English, error codes) |
 
 ## 5. Flows
 
@@ -109,7 +109,9 @@ after confirmation → rclone per mapping (`seed`: only into empty targets, `pro
 uploaded nor deleted) with `--use-json-log --stats 1s`: file messages become the change lists and
 the log (event `upload-line`), the statistics per mapping become the progress (event
 `upload-progress`: bytes, files, remaining time; a running bar in the dry run) → finally write
-`.website-manager.json`.
+`.website-manager.json`. **Cancel** (command `cancel_task`, after a confirmation for a real
+upload) stops the running rclone; no further mapping starts and no version file is written, so
+the overview does not show the new version as online.
 "Upload now" always runs a dry run (`--dry-run`) first and asks with the number of new and deleted
 files.
 
@@ -124,7 +126,10 @@ the downloaded Node.js) → the output (`build_output`, default `dist`) replaces
 `dist/`, the previous `dist/` is kept in `.runtime/dist-before-build/` → Node.js versions no longer
 needed are removed from the cache. Each step that has work to do is sent as `build-progress`
 (`node-download` with bytes, `node-extract`, `dependencies`, `build` or `dev-start`); output lines
-go to `build-line`. A failure keeps the display on the step that failed.
+go to `build-line`. A failure keeps the display on the step that failed. **Cancel** stops the
+Node.js download between two blocks (the partial archive is removed) or ends `npm`/the build
+script with its whole process group; `dist/` is only replaced after a successful build, so it
+stays as it was.
 
 **Development mode:** like rebuild up to the script, then `dev` in its own process group (with
 `--ignore-lock` for `astro dev`); the first local address in the output is opened in the browser.
