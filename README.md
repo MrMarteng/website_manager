@@ -5,7 +5,7 @@ preview it locally and upload it to their own webspace – no technical knowledg
 
 ![Overview of a website in the Website Manager: local and online version, stored access and the next step](docs/images/overview.png)
 
-> Version 0.3.2 (core workflow with rebuild and development mode). Changes: [CHANGELOG.md](CHANGELOG.md) ·
+> Version 0.4.0 (new user interface, bundled PHP/rclone). Changes: [CHANGELOG.md](CHANGELOG.md) ·
 > Architecture: [docs/architecture.md](docs/architecture.md) · Spike report: [docs/spike/phase-0.md](docs/spike/phase-0.md).
 
 ## Download

@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-28
+
+New user interface; installers work without any further installation.
+
 ### Added
 
 - New user interface with a sidebar: websites, sections (overview, publish, versions, edit,
@@ -129,7 +133,8 @@ Feasibility state (phase 0), tested on macOS only.
 - Documentation: architecture, formats, changelog, spike report, Rust guideline with rules for
   maintaining documentation and Semantic Versioning; test for consistent version numbers.
 
-[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/MrMarteng/website_manager/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/MrMarteng/website_manager/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MrMarteng/website_manager/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MrMarteng/website_manager/compare/v0.2.0...v0.3.0
