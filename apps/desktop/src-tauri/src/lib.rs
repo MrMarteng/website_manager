@@ -24,16 +24,19 @@ pub const UPLOAD_LINE_EVENT: &str = "upload-line";
 pub const UPLOAD_PROGRESS_EVENT: &str = "upload-progress";
 /// Event with one line of build or development server output (for the log).
 pub const BUILD_LINE_EVENT: &str = "build-line";
-/// Event with the running build step ([`site::BuildProgress`]).
+/// Event with the running build step (`site::BuildProgress`).
 pub const BUILD_PROGRESS_EVENT: &str = "build-progress";
-/// Event with the running preview and development server ([`commands::ServerStatus`]).
+/// Event with the running preview and development server (`commands::ServerStatus`).
 pub const STATUS_EVENT: &str = "server-status";
 
 /// Shared state of the running app.
 #[derive(Default)]
 pub struct AppState {
+    /// Running local preview (PHP server), if any.
     pub preview: Mutex<Option<preview::Preview>>,
+    /// Running development server, if any.
     pub dev: Mutex<Option<site::DevServer>>,
+    /// Log lines of this session, shown under "Log".
     pub log: Arc<Mutex<Vec<String>>>,
     /// Packages handed over before the window asked for them.
     pub pending_open: Mutex<Vec<PathBuf>>,

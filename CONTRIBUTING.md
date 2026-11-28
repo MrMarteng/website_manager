@@ -19,7 +19,9 @@
   update a program, edit `apps/desktop/sidecars.json` and run
   `python3 .github/scripts/sidecars.py lock`.
 * Before pushing: `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-  `cargo test --workspace`. The same steps run in CI (`.github/workflows/build.yml`); installers
+  `cargo test --workspace` and
+  `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items`. The same
+  steps run in CI (`.github/workflows/build.yml`); installers
   are built there on tags `v*` and on demand.
 
 ## Documentation, changelog, version
@@ -73,7 +75,10 @@ These belong to the change and go into the same commit as the code:
 * **Security:** never use paths from packages unchecked (`wm_core::archive::safe_relative_path`);
   never pass passwords as program arguments; start external programs without a shell.
 * **Naming:** descriptive and searchable, no abbreviations except established ones (`url`, `id`).
-* **Documentation:** public functions with `///`, including `# Errors` if they can fail.
+* **Documentation:** every public item with `///` and every module with `//!` (the lint
+  `missing_docs` enforces it); functions that can fail with `# Errors`. Central entry points
+  have `# Examples` that run as doc tests (`archive::write_package`, `credentials::encrypt`,
+  `DeployConfig::parse`). Links to private items only in private documentation.
 
 ## User interface
 

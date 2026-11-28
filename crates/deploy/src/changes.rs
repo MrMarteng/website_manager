@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 /// Kind of change to a file on the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangeKind {
+    /// New or changed file.
     Upload,
+    /// File removed from the server.
     Delete,
 }
 
@@ -14,16 +16,23 @@ pub enum ChangeKind {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TransferStats {
+    /// Bytes transferred so far.
     pub bytes: u64,
+    /// Bytes to transfer as known so far (grows while rclone compares).
     pub total_bytes: u64,
+    /// Files transferred so far.
     pub transfers: u64,
+    /// Files to transfer as known so far.
     pub total_transfers: u64,
+    /// Files compared so far.
     pub checks: u64,
+    /// Files to compare as known so far.
     pub total_checks: u64,
     /// Estimated seconds left; `None` while rclone cannot tell.
     pub eta: Option<f64>,
     /// Bytes per second.
     pub speed: f64,
+    /// Errors so far.
     pub errors: u64,
 }
 
@@ -32,12 +41,20 @@ pub struct TransferStats {
 pub enum LogEvent {
     /// A file was (or in a dry run would be) uploaded or deleted; path relative to the mapping.
     Change {
+        /// Upload or deletion.
         kind: ChangeKind,
+        /// Path relative to the mapping's target.
         path: String,
+        /// The message formatted for the log.
         text: String,
     },
-    /// Periodic statistics; `text` is rclone's multi-line summary.
-    Stats { stats: TransferStats, text: String },
+    /// Periodic statistics.
+    Stats {
+        /// The numbers.
+        stats: TransferStats,
+        /// rclone's multi-line summary.
+        text: String,
+    },
     /// Any other message, already formatted for the log.
     Text(String),
 }

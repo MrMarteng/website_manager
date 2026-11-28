@@ -7,7 +7,9 @@ pub mod npm;
 /// Operating system and CPU architecture in the naming of the Node.js downloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Platform {
+    /// `darwin`, `linux` or `win`.
     pub os: &'static str,
+    /// `arm64` or `x64`.
     pub arch: &'static str,
 }
 
@@ -31,6 +33,7 @@ impl Platform {
         Ok(Self { os, arch })
     }
 
+    /// Whether this is Windows (zip archives, `node.exe`).
     #[must_use]
     pub fn is_windows(self) -> bool {
         self.os == "win"

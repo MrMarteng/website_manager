@@ -8,6 +8,7 @@ use crate::DeployError;
 /// Transfer protocol of the webspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Protocol {
+    /// SSH file transfer (default).
     #[default]
     Sftp,
     /// FTP with explicit TLS; plain FTP is not supported.
@@ -17,12 +18,17 @@ pub enum Protocol {
 /// The `[server]` block.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServerConfig {
+    /// Transfer protocol.
     pub protocol: Protocol,
+    /// Server name.
     pub host: String,
+    /// Login name.
     pub user: String,
+    /// Port; 22 for SFTP and 21 for FTPS unless set.
     pub port: u16,
     /// SSH key; relative paths are resolved against the folder of the `deploy.conf`.
     pub key_file: Option<PathBuf>,
+    /// Recorded host keys of the server (SFTP), checked by rclone.
     pub known_hosts_file: Option<PathBuf>,
 }
 
@@ -55,9 +61,11 @@ pub struct Mapping {
 /// A parsed `deploy.conf`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeployConfig {
+    /// The `[server]` block.
     pub server: ServerConfig,
     /// Folder the mapping sources are relative to.
     pub base_dir: PathBuf,
+    /// Mappings in file order.
     pub mappings: Vec<Mapping>,
 }
 
@@ -81,6 +89,27 @@ impl DeployConfig {
     ///
     /// # Errors
     /// Fails for syntax errors, unknown options or missing `host`/`user`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::path::Path;
+    /// use teleschirm_deploy::{DeployConfig, MappingMode, Protocol};
+    ///
+    /// let text = "[server]
+    /// host = example.com
+    /// user = web123
+    ///
+    /// dist/backend/data -> /site/backend/data | mode=seed
+    /// dist -> /site | protect=backend/data/*.json";
+    /// let config = DeployConfig::parse(text, Path::new("/projects/cafe"))?;
+    ///
+    /// assert_eq!(config.server.protocol, Protocol::Sftp);
+    /// assert_eq!(config.server.port, 22);
+    /// assert_eq!(config.mappings[0].mode, Some(MappingMode::Seed));
+    /// assert_eq!(config.mappings[1].protect, ["backend/data/*.json"]);
+    /// # Ok::<(), teleschirm_deploy::DeployError>(())
+    /// ```
     pub fn parse(text: &str, config_dir: &Path) -> Result<Self, DeployError> {
         let mut server = RawServer::default();
         let mut mappings = Vec::new();

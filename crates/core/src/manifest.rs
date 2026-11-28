@@ -1,3 +1,5 @@
+//! The package manifest (`manifest.json`): metadata and the checksum of every payload file.
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};

@@ -16,7 +16,9 @@ use crate::{DeployError, VERSION_FILE};
 /// Content of the version file on the server.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VersionStamp {
+    /// Project name.
     pub name: String,
+    /// Version of the uploaded package.
     pub version: String,
     /// Creation time of the uploaded package (RFC 3339); compared to detect older packages.
     pub created: String,
@@ -25,9 +27,13 @@ pub struct VersionStamp {
 /// Outcome of a run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunSummary {
+    /// Number of mappings.
     pub total: usize,
+    /// Mappings finished successfully, including skipped seeds.
     pub done: usize,
+    /// `seed` mappings skipped because the target already had content.
     pub skipped_seed: usize,
+    /// Whether this was a dry run (nothing changed on the server).
     pub dry_run: bool,
     /// Server paths that were (or in a dry run would be) uploaded.
     pub uploaded: Vec<String>,
@@ -41,8 +47,11 @@ pub struct RunSummary {
 pub struct UploadProgress {
     /// 1-based number of the mapping being uploaded.
     pub mapping: usize,
+    /// Number of mappings in the run.
     pub mappings: usize,
+    /// Whether this is a dry run.
     pub dry_run: bool,
+    /// rclone's latest statistics for this mapping (zero at its start).
     pub stats: TransferStats,
 }
 
@@ -53,6 +62,7 @@ pub struct Runner {
 }
 
 impl Runner {
+    /// A runner using the given rclone program; with `dry_run` nothing changes on the server.
     #[must_use]
     pub fn new(rclone: PathBuf, dry_run: bool) -> Self {
         Self { rclone, dry_run }

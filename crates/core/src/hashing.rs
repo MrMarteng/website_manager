@@ -1,3 +1,5 @@
+//! SHA-256 checksums of files, streams and byte slices, as lowercase hex.
+
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;

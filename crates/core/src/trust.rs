@@ -1,3 +1,5 @@
+//! Publisher binding (trust on first use): which publisher key belongs to which project.
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};

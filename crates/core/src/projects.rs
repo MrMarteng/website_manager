@@ -29,12 +29,16 @@ pub const KEPT_VERSIONS: usize = 5;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectSettings {
+    /// `sftp` or `ftps`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
+    /// Server name of the webspace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
+    /// Login name on the webspace.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<String>,
+    /// Port of the server.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
     /// Replaces the website root folder on the server in all mappings.
@@ -52,11 +56,13 @@ pub struct ProjectSettings {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRecord {
+    /// Project name from the manifest; also the folder name.
     pub name: String,
     /// Id of the current version.
     pub current: String,
     /// Version ids, newest first.
     pub versions: Vec<String>,
+    /// The customer's changes to the upload settings.
     #[serde(default)]
     pub settings: ProjectSettings,
     /// Credentials for this project are in the OS keychain. Kept here so the app never has to
@@ -72,6 +78,7 @@ pub struct ProjectRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LastUpload {
+    /// Version of the uploaded package.
     pub version: String,
     /// `created` of the uploaded package.
     pub created: String,
@@ -86,9 +93,13 @@ pub struct LastUpload {
 /// Outcome of importing a package.
 #[derive(Debug, Clone)]
 pub struct ImportResult {
+    /// The verified package.
     pub package: VerifiedPackage,
+    /// Outcome of the publisher check (new binding or known publisher).
     pub decision: TrustDecision,
+    /// Id of the imported version (`<version>_<created>`).
     pub version_id: String,
+    /// Folder the version was extracted to.
     pub folder: PathBuf,
     /// Version that was current before, if any.
     pub previous: Option<String>,
@@ -104,6 +115,7 @@ pub struct ProjectStore {
 }
 
 impl ProjectStore {
+    /// A store whose projects live in subfolders of `root`.
     #[must_use]
     pub fn new(root: impl Into<PathBuf>) -> Self {
         Self { root: root.into() }

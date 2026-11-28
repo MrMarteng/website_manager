@@ -1,3 +1,6 @@
+//! Secret detection before packing: forbidden file names (`.env`, keys …) and text markers of
+//! private keys or tokens.
+
 use std::fs;
 use std::path::Path;
 

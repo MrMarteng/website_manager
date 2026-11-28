@@ -19,6 +19,7 @@ pub const CREDENTIALS_FILE: &str = "credentials.enc";
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Credentials {
+    /// Password for SFTP or FTPS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     /// Private SSH key (OpenSSH format) as text.
@@ -37,6 +38,7 @@ impl std::fmt::Debug for Credentials {
 }
 
 impl Credentials {
+    /// Whether neither a password nor a key is set.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.password.is_none() && self.private_key.is_none()
@@ -48,7 +50,9 @@ impl Credentials {
 pub struct KdfParams {
     /// Memory in KiB.
     pub memory_kib: u32,
+    /// Number of passes over the memory.
     pub iterations: u32,
+    /// Number of lanes (threads).
     pub parallelism: u32,
 }
 
@@ -76,7 +80,23 @@ const KDF_NAME: &str = "argon2id";
 /// Encrypts credentials with `password`; returns the file content.
 ///
 /// # Errors
-/// Fails if the password is too short or random numbers are unavailable.
+/// Fails if the password is too short (fewer than 8 characters) or random numbers are
+/// unavailable.
+///
+/// # Examples
+///
+/// ```
+/// use wm_core::CoreError;
+/// use wm_core::credentials::{Credentials, decrypt, encrypt};
+///
+/// let access = Credentials { password: Some("webspace-secret".into()), private_key: None };
+/// let file = encrypt(&access, "package password")?;
+/// assert!(!file.contains("webspace-secret"));
+///
+/// assert_eq!(decrypt(&file, "package password")?, access);
+/// assert!(matches!(decrypt(&file, "wrong password"), Err(CoreError::WrongPassword)));
+/// # Ok::<(), CoreError>(())
+/// ```
 pub fn encrypt(credentials: &Credentials, password: &str) -> Result<String, CoreError> {
     encrypt_with(credentials, password, KdfParams::default())
 }
@@ -117,7 +137,7 @@ pub fn encrypt_with(
     serde_json::to_string_pretty(&file).map_err(|e| CoreError::json("credentials", e))
 }
 
-/// Decrypts file content produced by [`encrypt`].
+/// Decrypts file content produced by [`encrypt`] (example there).
 ///
 /// # Errors
 /// [`CoreError::WrongPassword`] for a wrong password or changed file, other errors for
