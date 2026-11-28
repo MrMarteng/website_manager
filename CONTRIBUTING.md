@@ -26,7 +26,7 @@
 
 **Language:** documentation (`README.md`, `CONTRIBUTING.md`, `docs/`), `CHANGELOG.md`, code
 comments (`//`, `///`, `//!`, comments in JS, CSS, PHP, YAML) and commit messages are in English.
-User interface texts live in `apps/desktop/ui/i18n.js` (German and English).
+User interface texts live in `apps/desktop/ui/src/i18n/` (German and English).
 
 These belong to the change and go into the same commit as the code:
 
@@ -79,4 +79,12 @@ These belong to the change and go into the same commit as the code:
 
 * The web view only calls the permitted Rust commands (`apps/desktop/src-tauri/src/commands.rs`);
   no file, process or network access from JavaScript.
-* All texts live in `apps/desktop/ui/i18n.js`; every language has the same keys.
+* The UI is TypeScript (strict) built with Vite, without a framework: `ui/src/views/` renders one
+  view each, `store.ts` holds the state, `router.ts` maps `#/site/<name>/<section>`, `api.ts` is
+  the only place that calls Rust commands or listens to events.
+* All texts live in `apps/desktop/ui/src/i18n/` (`de.ts` is the source, `en.ts` must have the same
+  keys); Rust errors carry a `code:<name>` that the UI translates. A test checks both.
+* No inline scripts or styles: the CSP allows `'self'` only. Icons are Tabler SVGs imported as text.
+* Before pushing: `npm test` and `npm run ui:build` in `apps/desktop`. `npm run ui:mock` shows the
+  UI with sample data in a browser; refresh `docs/images/overview.png` from it when the overview
+  changes visibly.
