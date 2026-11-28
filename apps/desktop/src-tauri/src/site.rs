@@ -127,9 +127,9 @@ pub fn resolve_bin(project: &Path, program: &str) -> Result<PathBuf, String> {
 /// Environment for child processes: managed Node.js and PHP first on `PATH`.
 fn command_env(runtime: &NodeRuntime) -> Vec<(String, String)> {
     let mut paths = vec![runtime.bin_dir.clone()];
-    let php = tools::php().program;
-    if let Some(dir) = php.parent().filter(|dir| php.is_absolute() && dir.is_dir()) {
-        paths.push(dir.to_path_buf());
+    // The CMS development server starts `php` by name; point it at the bundled or chosen PHP.
+    if let Ok(Some(dir)) = tools::php_path_dir(&runtime.cache_dir) {
+        paths.push(dir);
     }
     if let Some(system) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&system));

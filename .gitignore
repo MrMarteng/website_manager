@@ -3,3 +3,4 @@
 /apps/desktop/src-tauri/gen/
 *.tsweb
 .DS_Store
+/apps/desktop/src-tauri/binaries/
