@@ -4730,7 +4730,7 @@ dependencies = [
 
 [[package]]
 name = "teleschirm-deploy"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5481,7 +5481,7 @@ dependencies = [
 
 [[package]]
 name = "website-manager-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "globset",
@@ -5497,7 +5497,7 @@ dependencies = [
 
 [[package]]
 name = "website-manager-desktop"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "keyring",
  "serde",
@@ -5981,7 +5981,7 @@ checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
 
 [[package]]
 name = "wm-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "aes-gcm",
  "argon2",
