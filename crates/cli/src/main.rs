@@ -1,7 +1,6 @@
 //! `website-manager`: create, verify and upload Website Manager packages.
 
 mod pack;
-mod time;
 mod vendor;
 
 use std::path::PathBuf;

@@ -10,6 +10,7 @@ pub mod projects;
 pub mod runtime;
 pub mod secrets;
 pub mod signing;
+pub mod time;
 pub mod trust;
 
 pub use error::CoreError;

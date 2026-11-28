@@ -63,6 +63,24 @@ pub struct ProjectRecord {
     /// read the keychain (which may prompt for a password) just to show this.
     #[serde(default)]
     pub credentials_stored: bool,
+    /// Last successful upload (not a dry run).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_upload: Option<LastUpload>,
+}
+
+/// What was uploaded last, and where to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LastUpload {
+    pub version: String,
+    /// `created` of the uploaded package.
+    pub created: String,
+    /// Time of the upload (RFC 3339, UTC).
+    pub uploaded_at: String,
+    /// `server` or `folder`.
+    pub target: String,
+    /// Host name or folder path.
+    pub destination: String,
 }
 
 /// Outcome of importing a package.

@@ -64,6 +64,7 @@ pub struct Overview {
     pub has_sources: bool,
     /// Sources with a `package.json` are present, so the site can be rebuilt.
     pub can_build: bool,
+    pub last_upload: Option<wm_core::projects::LastUpload>,
 }
 
 fn version_info(manifest: &Manifest, id: &str, current: &str) -> VersionInfo {
@@ -160,5 +161,6 @@ pub fn build(store: &ProjectStore, trust_file: &Path, name: &str) -> Result<Over
         has_compliance: has_prefix("compliance/"),
         has_sources: has_prefix("project/"),
         can_build: folder.join("project/package.json").is_file(),
+        last_upload: record.last_upload.clone(),
     })
 }
