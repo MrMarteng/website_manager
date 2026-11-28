@@ -7,7 +7,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use teleschirm_deploy::{
-    Connection, Credential, DeployConfig, Mapping, MappingMode, Protocol, Runner, VersionStamp,
+    Connection, Credential, DeployConfig, Mapping, MappingMode, Protocol, Runner, UploadProgress,
+    VersionStamp,
 };
 use wm_core::projects::{ProjectSettings, read_manifest_copy};
 
@@ -137,7 +138,8 @@ fn write_temporary_key(folder: &Path, key: &str) -> Result<TemporaryKey, String>
     Ok(TemporaryKey(path))
 }
 
-/// Uploads the version in `folder`. Every rclone line goes to `emit`.
+/// Uploads the version in `folder`. Every rclone line goes to `emit`, the statistics to
+/// `progress`.
 ///
 /// # Errors
 /// Fails with a `code:` message for missing credentials, an unverified server or a newer
@@ -148,6 +150,7 @@ pub fn run(
     settings: &ProjectSettings,
     request: UploadRequest,
     emit: &mut dyn FnMut(&str),
+    progress: &mut dyn FnMut(&UploadProgress),
 ) -> Result<UploadResult, String> {
     let manifest = read_manifest_copy(folder).map_err(|e| e.to_string())?;
     let (mut config, pinned) = effective_config(folder, settings)?;
@@ -209,7 +212,14 @@ pub fn run(
         created: manifest.created.clone(),
     };
     let summary = runner
-        .run(&config, MappingMode::Sync, &connection, Some(&stamp), emit)
+        .run_with_progress(
+            &config,
+            MappingMode::Sync,
+            &connection,
+            Some(&stamp),
+            emit,
+            progress,
+        )
         .map_err(|e| e.to_string())?;
     let mut uploaded = summary.uploaded;
     let mut deleted = summary.deleted;
@@ -330,6 +340,7 @@ mod tests {
             accept_unverified_host: false,
         };
         let mut lines = Vec::new();
+        let mut reports = Vec::new();
         let result = run(
             &folder,
             "cafe",
@@ -338,8 +349,13 @@ mod tests {
             &mut |line| {
                 lines.push(line.to_owned());
             },
+            &mut |progress| reports.push(*progress),
         )
         .unwrap();
+        assert!(
+            reports.iter().any(|p| p.stats.transfers > 0),
+            "statistics are reported"
+        );
         assert!(
             result.uploaded.contains(&"/site/index.html".to_owned()),
             "{:?}",
@@ -360,6 +376,7 @@ mod tests {
             &ProjectSettings::default(),
             request(false),
             &mut |_| {},
+            &mut |_| {},
         )
         .unwrap_err();
         assert!(error.starts_with("code:newer-on-server"), "{error}");
@@ -369,6 +386,7 @@ mod tests {
                 "cafe",
                 &ProjectSettings::default(),
                 request(true),
+                &mut |_| {},
                 &mut |_| {}
             )
             .is_ok()
@@ -397,6 +415,7 @@ mod tests {
             "cafe",
             &ProjectSettings::default(),
             request,
+            &mut |_| {},
             &mut |_| {},
         )
         .unwrap_err();

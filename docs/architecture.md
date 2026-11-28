@@ -61,10 +61,10 @@ Dependencies only point downwards; `core` and `deploy` do not know each other.
 | Building block | Responsibility | Main modules |
 |---|---|---|
 | `wm-core` | package format, trust, projects | `archive` (write, verify, extract), `manifest`, `signing` (Ed25519), `trust` (publisher binding), `secrets` (secret detection), `credentials` (credential encryption), `projects` (versions, settings), `runtime::node` (download, verification, cache) |
-| `teleschirm-deploy` | upload | `config` (`deploy.conf` parser, change of the target folder), `plan` (rclone arguments per mapping), `runner` (execution, seed check, version file), `changes` (uploaded/deleted files from rclone output) |
+| `teleschirm-deploy` | upload | `config` (`deploy.conf` parser, change of the target folder), `plan` (rclone arguments per mapping), `runner` (execution, seed check, version file), `changes` (reads rclone's JSON log: uploaded/deleted files, transfer statistics, log text) |
 | `website-manager` (CLI) | agency tool | `keygen`, `pack` (positive list, cleaned `deploy.conf`, host keys, encrypted credentials, `vendor`: private npm packages as tarballs), `verify`, `deploy`, `node` |
-| `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode), `preview` + `router.php`, `error` (`CommandError` with `code` and `detail` for the UI), `tools` (locating PHP/rclone: `WM_PHP`/`WM_RCLONE`, then the bundled `wm-php`/`wm-rclone`, then the `PATH`); `lib` accepts packages by double-click, second app start and drag and drop |
-| `apps/desktop/ui` | web view | TypeScript + Vite, no framework: `api` (typed commands and events: upload/build lines, `server-status`), `store`, `router` (hash routes per website and section), `views/` (overview, publish, versions, edit with file tree, settings, log), `i18n/` (German/English, error codes) |
+| `apps/desktop` | customer UI | `commands` (only interface to the web view), `overview` (project view), `deployment` (apply settings, upload), `keychain` (OS keychain), `files` (file list), `site` (rebuild, development mode, build steps), `preview` + `router.php`, `error` (`CommandError` with `code` and `detail` for the UI), `tools` (locating PHP/rclone: `WM_PHP`/`WM_RCLONE`, then the bundled `wm-php`/`wm-rclone`, then the `PATH`); `lib` accepts packages by double-click, second app start and drag and drop |
+| `apps/desktop/ui` | web view | TypeScript + Vite, no framework: `api` (typed commands and events: upload/build lines and progress, `server-status`), `components/progress` (step, bar, details), `store`, `router` (hash routes per website and section), `views/` (overview, publish, versions, edit with file tree, settings, log), `i18n/` (German/English, error codes) |
 
 ## 5. Flows
 
@@ -106,7 +106,10 @@ identity: the recorded host key only applies to the server from the package, oth
 confirmation is required → access: entered password or keychain (SSH key as a temporary file with
 0600, deleted after the run) → read the version file from the server; if it is newer, continue only
 after confirmation → rclone per mapping (`seed`: only into empty targets, `protect`: neither
-uploaded nor deleted), every line as an event to the window → finally write `.website-manager.json`.
+uploaded nor deleted) with `--use-json-log --stats 1s`: file messages become the change lists and
+the log (event `upload-line`), the statistics per mapping become the progress (event
+`upload-progress`: bytes, files, remaining time; a running bar in the dry run) → finally write
+`.website-manager.json`.
 "Upload now" always runs a dry run (`--dry-run`) first and asks with the number of new and deleted
 files.
 
@@ -119,7 +122,9 @@ the lockfile → run the `build` script from `package.json` without a shell (`KE
 `program` is resolved through the package's `bin` field to its JavaScript file and started with
 the downloaded Node.js) → the output (`build_output`, default `dist`) replaces the version's
 `dist/`, the previous `dist/` is kept in `.runtime/dist-before-build/` → Node.js versions no longer
-needed are removed from the cache.
+needed are removed from the cache. Each step that has work to do is sent as `build-progress`
+(`node-download` with bytes, `node-extract`, `dependencies`, `build` or `dev-start`); output lines
+go to `build-line`. A failure keeps the display on the step that failed.
 
 **Development mode:** like rebuild up to the script, then `dev` in its own process group (with
 `--ignore-lock` for `astro dev`); the first local address in the output is opened in the browser.

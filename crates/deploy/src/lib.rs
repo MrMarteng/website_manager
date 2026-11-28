@@ -10,11 +10,11 @@ pub mod error;
 pub mod plan;
 pub mod runner;
 
-pub use changes::ChangeKind;
+pub use changes::{ChangeKind, TransferStats};
 pub use config::{DeployConfig, Mapping, MappingMode, Protocol, ServerConfig};
 pub use error::DeployError;
 pub use plan::{Connection, Credential, Step, build_plan};
-pub use runner::{RunSummary, Runner, VersionStamp};
+pub use runner::{RunSummary, Runner, UploadProgress, VersionStamp};
 
 /// File written to the site root after every successful upload.
 pub const VERSION_FILE: &str = ".website-manager.json";

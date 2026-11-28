@@ -5,6 +5,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Progress display for rebuild, development mode and publishing: the current step ("Step 2 of 3 ·
+  Installing dependencies"), percent while Node.js downloads and while uploading, files "x of y"
+  and the remaining time. After an error the display names the step that failed.
+
+### Changed
+
+- Uploads read rclone's JSON log; the log shows file messages and rclone's final summary instead
+  of every raw line.
+
 ## [0.4.0] - 2026-11-28
 
 New user interface; installers work without any further installation.

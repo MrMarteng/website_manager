@@ -1,9 +1,11 @@
 // Edit: rebuild, development mode and the files of the version as a tree.
 import { attempt, setOverview } from "../actions";
 import { api, events } from "../api";
+import { clearProgress, failProgress, hasFailed, renderProgress, resetProgress, setProgress } from "../components/progress";
 import { toast } from "../components/toast";
 import { button, h, icon } from "../dom";
 import { formatSize, t } from "../i18n";
+import { buildProgressView } from "../progressText";
 import { state, update, whileBusy } from "../store";
 import type { FileEntry, Overview } from "../types";
 import { resetPublish } from "./publish";
@@ -38,15 +40,32 @@ export function buildTree(entries: FileEntry[]): TreeNode {
 const MAX_FILTER_RESULTS = 300;
 const files = new Map<string, FileEntry[]>();
 let filter = "";
-let buildLine = "";
+const PROGRESS_ID = "build-progress";
+/** What the progress display belongs to: the running (or failed) action and its website. */
+let progressRun: { mode: "build" | "dev"; project: string } | null = null;
 
-/** Shows the latest build or dev server line; called once at start-up. */
+/** Feeds build steps and output into the progress display; called once at start-up. */
 export function listenToBuildLines(): void {
   void events.onBuildLine((line) => {
-    buildLine = line.trim();
-    const element = document.getElementById("build-line");
-    if (element) element.textContent = buildLine;
+    // The development server keeps printing after it started; only show lines while starting.
+    if (state.busy.has("build") || state.busy.has("dev")) setProgress(PROGRESS_ID, { line: line.trim() });
   });
+  void events.onBuildProgress((progress) => {
+    if (progressRun) setProgress(PROGRESS_ID, buildProgressView(progress, progressRun.mode));
+  });
+}
+
+/** Runs a build or the start of development mode with the progress display. */
+async function withProgress<T>(project: Overview, mode: "build" | "dev", action: () => Promise<T>): Promise<T | undefined> {
+  progressRun = { mode, project: project.name };
+  resetProgress(PROGRESS_ID);
+  const result = await whileBusy(mode, () => attempt(action));
+  if (result === undefined) failProgress(PROGRESS_ID);
+  else {
+    clearProgress(PROGRESS_ID);
+    progressRun = null;
+  }
+  return result;
 }
 
 function fileButton(project: Overview, entry: FileEntry, label: string): HTMLElement {
@@ -109,8 +128,7 @@ async function loadFiles(project: Overview, container: HTMLElement): Promise<voi
 }
 
 async function rebuild(project: Overview): Promise<void> {
-  buildLine = "";
-  const overview = await whileBusy("build", () => attempt(() => api.buildSite(project.name)));
+  const overview = await withProgress(project, "build", () => api.buildSite(project.name));
   if (!overview) return;
   files.delete(project.name);
   resetPublish(project.name);
@@ -122,8 +140,7 @@ async function toggleDev(project: Overview): Promise<void> {
   if (state.status.dev) {
     await attempt(() => api.stopDev());
   } else {
-    buildLine = "";
-    await whileBusy("dev", () => attempt(() => api.startDev(project.name)));
+    await withProgress(project, "dev", () => api.startDev(project.name));
   }
   const status = await attempt(() => api.serverStatus());
   if (status) update({ status });
@@ -131,14 +148,8 @@ async function toggleDev(project: Overview): Promise<void> {
 
 export function renderEdit(project: Overview): HTMLElement {
   const building = state.busy.has("build") || state.busy.has("dev");
-  const progress = building
-    ? h(
-        "div",
-        { class: "progress", role: "status" },
-        h("div", { class: "progress-bar indeterminate", role: "progressbar", "aria-label": t("working") }),
-        h("p", { class: "small muted", id: "build-line" }, buildLine),
-      )
-    : null;
+  const showProgress = building || (hasFailed(PROGRESS_ID) && progressRun?.project === project.name);
+  const progress = showProgress ? h("section", { class: "card" }, renderProgress(PROGRESS_ID)) : null;
 
   const tree = h("div", { class: "tree-container" });
   const search = h("input", {

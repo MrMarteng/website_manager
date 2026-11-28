@@ -1,7 +1,7 @@
 //! Downloads official Node.js builds from nodejs.org, verifies their SHA-256 and caches them.
 
 use std::fs::{self, File};
-use std::io;
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use super::Platform;
@@ -154,6 +154,15 @@ pub fn resolve_version(spec: &str, cache_dir: &Path) -> Result<String, CoreError
     }
 }
 
+/// Stage of preparing a Node.js runtime, reported by [`ensure_with_progress`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeProgress {
+    /// Downloading the archive; `total` is unknown if the server sends no length.
+    Download { bytes: u64, total: Option<u64> },
+    /// Verifying the checksum and unpacking.
+    Extract,
+}
+
 /// Returns the cached runtime for `spec` (`22.23.5`, `22` or `lts`), downloading and verifying
 /// it first if needed.
 ///
@@ -161,6 +170,19 @@ pub fn resolve_version(spec: &str, cache_dir: &Path) -> Result<String, CoreError
 /// Fails if the version cannot be resolved, the download fails, the checksum does not match or
 /// extraction fails.
 pub fn ensure(spec: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError> {
+    ensure_with_progress(spec, cache_dir, &mut |_| {})
+}
+
+/// Like [`ensure`]; reports download and extraction to `progress`. Nothing is reported when
+/// the runtime is already cached.
+///
+/// # Errors
+/// As [`ensure`].
+pub fn ensure_with_progress(
+    spec: &str,
+    cache_dir: &Path,
+    progress: &mut dyn FnMut(NodeProgress),
+) -> Result<NodeRuntime, CoreError> {
     let version = resolve_version(spec, cache_dir)?;
     let version = version.as_str();
     let platform = Platform::current()?;
@@ -183,7 +205,8 @@ pub fn ensure(spec: &str, cache_dir: &Path) -> Result<NodeRuntime, CoreError> {
 
     let archive_url = format!("{DIST_URL}/v{version}/{archive}");
     let archive_path = cache_dir.join(format!("{archive}.download"));
-    download_file(&archive_url, &archive_path)?;
+    download_file(&archive_url, &archive_path, progress)?;
+    progress(NodeProgress::Extract);
     let actual = sha256_file(&archive_path)?;
     if actual != expected {
         let _ = fs::remove_file(&archive_path);
@@ -260,15 +283,53 @@ fn download_text(url: &str) -> Result<String, CoreError> {
         })
 }
 
-fn download_file(url: &str, target: &Path) -> Result<(), CoreError> {
+/// Reports download progress at most every this many bytes.
+const PROGRESS_STEP: u64 = 256 * 1024;
+
+fn download_file(
+    url: &str,
+    target: &Path,
+    progress: &mut dyn FnMut(NodeProgress),
+) -> Result<(), CoreError> {
     let response = ureq::get(url).call().map_err(|e| CoreError::Download {
         url: url.to_owned(),
         message: e.to_string(),
     })?;
+    let total = response.body().content_length();
+    let mut reader = response.into_body().into_reader();
     let mut file = File::create(target).map_err(|e| CoreError::io(target, e))?;
-    io::copy(&mut response.into_body().into_reader(), &mut file)
+    copy_with_progress(&mut reader, &mut file, total, progress)
         .map_err(|e| CoreError::io(target, e))?;
     Ok(())
+}
+
+fn copy_with_progress(
+    reader: &mut dyn Read,
+    writer: &mut dyn Write,
+    total: Option<u64>,
+    progress: &mut dyn FnMut(NodeProgress),
+) -> io::Result<u64> {
+    let mut buffer = vec![0; 64 * 1024];
+    let (mut bytes, mut reported) = (0_u64, 0_u64);
+    progress(NodeProgress::Download { bytes, total });
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        writer.write_all(&buffer[..read])?;
+        bytes += read as u64;
+        if bytes - reported >= PROGRESS_STEP {
+            reported = bytes;
+            progress(NodeProgress::Download { bytes, total });
+        }
+    }
+    if reported != bytes {
+        progress(NodeProgress::Download { bytes, total });
+    }
+    Ok(bytes)
 }
 
 fn extract_tar_gz(archive: &Path, target: &Path) -> Result<(), CoreError> {
@@ -310,6 +371,33 @@ fn extract_zip(archive: &Path, target: &Path) -> Result<(), CoreError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_progress_is_reported_in_steps_and_at_the_end() {
+        let data = vec![7_u8; 600 * 1024];
+        let mut copy = Vec::new();
+        let mut reports = Vec::new();
+        let total = Some(data.len() as u64);
+        let copied = copy_with_progress(&mut data.as_slice(), &mut copy, total, &mut |p| {
+            reports.push(p);
+        })
+        .unwrap();
+        assert_eq!(copied, data.len() as u64);
+        assert_eq!(copy, data);
+        assert_eq!(
+            reports.first(),
+            Some(&NodeProgress::Download { bytes: 0, total })
+        );
+        assert_eq!(
+            reports.last(),
+            Some(&NodeProgress::Download {
+                bytes: copied,
+                total
+            })
+        );
+        // 600 KiB in 256 KiB steps: start, 2 steps, end.
+        assert_eq!(reports.len(), 4);
+    }
 
     const MAC: Platform = Platform {
         os: "darwin",

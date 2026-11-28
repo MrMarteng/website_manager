@@ -18,10 +18,14 @@ use tauri::{AppHandle, DragDropEvent, Emitter, Manager, RunEvent, WindowEvent};
 
 /// Event sent to the window when a package should be opened (double-click, drag and drop).
 pub const OPEN_EVENT: &str = "package-open-requested";
-/// Event with one line of upload output.
-pub const UPLOAD_EVENT: &str = "upload-progress";
-/// Event with one line of build or development server output.
-pub const BUILD_EVENT: &str = "build-progress";
+/// Event with one line of upload output (for the log).
+pub const UPLOAD_LINE_EVENT: &str = "upload-line";
+/// Event with the upload progress ([`teleschirm_deploy::UploadProgress`]).
+pub const UPLOAD_PROGRESS_EVENT: &str = "upload-progress";
+/// Event with one line of build or development server output (for the log).
+pub const BUILD_LINE_EVENT: &str = "build-line";
+/// Event with the running build step ([`site::BuildProgress`]).
+pub const BUILD_PROGRESS_EVENT: &str = "build-progress";
 /// Event with the running preview and development server ([`commands::ServerStatus`]).
 pub const STATUS_EVENT: &str = "server-status";
 
