@@ -64,6 +64,12 @@ export function formatDate(value: string): string {
     : date.toLocaleString(language, { dateStyle: "medium", timeStyle: "short" });
 }
 
+/** Rough remaining time: "12 s", "3 min". */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
+  return `${Math.round(seconds / 60)} min`;
+}
+
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

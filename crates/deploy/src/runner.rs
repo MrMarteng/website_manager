@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 
 use serde::{Deserialize, Serialize};
 
-use crate::changes::{ChangeKind, parse_line};
+use crate::changes::{ChangeKind, LogEvent, TransferStats, parse_json_line};
 use crate::config::{DeployConfig, MappingMode};
 use crate::plan::{
     Connection, Credential, build_plan, connection_settings, remote_path, site_root,
@@ -33,6 +33,17 @@ pub struct RunSummary {
     pub uploaded: Vec<String>,
     /// Server paths that were (or in a dry run would be) deleted.
     pub deleted: Vec<String>,
+}
+
+/// Progress of a run: which mapping is being uploaded and rclone's statistics for it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadProgress {
+    /// 1-based number of the mapping being uploaded.
+    pub mapping: usize,
+    pub mappings: usize,
+    pub dry_run: bool,
+    pub stats: TransferStats,
 }
 
 /// Executes uploads with a given rclone program.
@@ -74,7 +85,7 @@ impl Runner {
     }
 
     /// Uploads all mappings, then writes `stamp` as version file (not in a dry run).
-    /// Every output line of rclone is passed to `log`.
+    /// Every output line of rclone is passed to `log` as readable text.
     ///
     /// # Errors
     /// Fails if planning fails, rclone cannot be started or a mapping fails.
@@ -85,6 +96,23 @@ impl Runner {
         connection: &Connection,
         stamp: Option<&VersionStamp>,
         log: &mut dyn FnMut(&str),
+    ) -> Result<RunSummary, DeployError> {
+        self.run_with_progress(config, run_mode, connection, stamp, log, &mut |_| {})
+    }
+
+    /// Like [`Runner::run`], and reports rclone's statistics (about once per second) to
+    /// `progress`.
+    ///
+    /// # Errors
+    /// Fails if planning fails, rclone cannot be started or a mapping fails.
+    pub fn run_with_progress(
+        &self,
+        config: &DeployConfig,
+        run_mode: MappingMode,
+        connection: &Connection,
+        stamp: Option<&VersionStamp>,
+        log: &mut dyn FnMut(&str),
+        progress: &mut dyn FnMut(&UploadProgress),
     ) -> Result<RunSummary, DeployError> {
         let steps = build_plan(config, run_mode, connection)?;
         let mut summary = RunSummary {
@@ -97,7 +125,16 @@ impl Runner {
         };
         let mut failed = 0;
 
-        for step in &steps {
+        for (index, step) in steps.iter().enumerate() {
+            let mut report = |stats: TransferStats| {
+                progress(&UploadProgress {
+                    mapping: index + 1,
+                    mappings: steps.len(),
+                    dry_run: self.dry_run,
+                    stats,
+                });
+            };
+            report(TransferStats::default());
             log(&format!(
                 "==> [{:?}] {} -> {}",
                 step.mode, step.mapping.source, step.mapping.target
@@ -118,21 +155,37 @@ impl Runner {
                     "--retries",
                     "1",
                     "--verbose",
+                    "--use-json-log",
+                    "--stats",
+                    "1s",
+                    "--stats-log-level",
+                    "NOTICE",
                 ]
                 .map(str::to_owned),
             );
             let target = step.mapping.target.trim_end_matches('/').to_owned();
-            let mut on_line = |line: &str| {
-                if let Some((kind, path)) = parse_line(line) {
+            // Statistics come every second; only the last summary goes to the log.
+            let mut last_stats = String::new();
+            let mut on_line = |line: &str| match parse_json_line(line) {
+                LogEvent::Change { kind, path, text } => {
                     let full = format!("{target}/{path}");
                     match kind {
                         ChangeKind::Upload => summary.uploaded.push(full),
                         ChangeKind::Delete => summary.deleted.push(full),
                     }
+                    log(&format!("    {text}"));
                 }
-                log(line);
+                LogEvent::Stats { stats, text } => {
+                    report(stats);
+                    last_stats = text;
+                }
+                LogEvent::Text(text) => log(&format!("    {text}")),
             };
-            if self.stream(config, connection, &args, &mut on_line)? {
+            let succeeded = self.stream(config, connection, &args, &mut on_line)?;
+            for line in last_stats.lines().filter(|line| !line.trim().is_empty()) {
+                log(&format!("    {line}"));
+            }
+            if succeeded {
                 summary.done += 1;
                 log("    OK");
             } else {
@@ -212,13 +265,13 @@ impl Runner {
         }
     }
 
-    /// Runs rclone and passes stdout and stderr lines to `log`. Returns whether it succeeded.
+    /// Runs rclone and passes its stderr lines to `on_line`. Returns whether it succeeded.
     fn stream(
         &self,
         config: &DeployConfig,
         connection: &Connection,
         args: &[String],
-        log: &mut dyn FnMut(&str),
+        on_line: &mut dyn FnMut(&str),
     ) -> Result<bool, DeployError> {
         let mut child = self
             .command(config, connection, args)?
@@ -226,10 +279,10 @@ impl Runner {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|source| self.start_error(source))?;
-        // rclone writes its progress and --verbose output to stderr.
+        // rclone writes its log, including the statistics, to stderr.
         if let Some(stderr) = child.stderr.take() {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                log(&format!("    {line}"));
+                on_line(&line);
             }
         }
         let status = child

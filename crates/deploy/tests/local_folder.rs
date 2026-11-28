@@ -80,15 +80,24 @@ fn sync_respects_seed_protect_and_version_file() {
     assert_eq!(preview.deleted, vec!["/site/old.html"]);
 
     let runner = Runner::new(rclone, false);
+    let mut reports = Vec::new();
     let summary = runner
-        .run(
+        .run_with_progress(
             &config,
             MappingMode::Sync,
             &connection,
             Some(&stamp),
             &mut |_| {},
+            &mut |progress| reports.push(*progress),
         )
         .unwrap();
+    // Every mapping starts at zero; rclone's final statistics of the sync mapping are complete.
+    let last = reports.last().unwrap();
+    assert_eq!(last.mapping, last.mappings);
+    assert!(!last.dry_run);
+    assert!(last.stats.transfers > 0);
+    assert_eq!(last.stats.transfers, last.stats.total_transfers);
+    assert_eq!(last.stats.bytes, last.stats.total_bytes);
     assert_eq!(summary.skipped_seed, 1, "seed target already had content");
     assert_eq!(summary.deleted, vec!["/site/old.html"]);
     assert_eq!(

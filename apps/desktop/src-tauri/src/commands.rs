@@ -14,7 +14,10 @@ use crate::deployment::{self, UploadRequest, UploadResult};
 use crate::error::CommandError;
 use crate::files::{self, FileEntry};
 use crate::overview::{self, Overview};
-use crate::{AppState, BUILD_EVENT, UPLOAD_EVENT, keychain, preview, site};
+use crate::{
+    AppState, BUILD_LINE_EVENT, BUILD_PROGRESS_EVENT, UPLOAD_LINE_EVENT, UPLOAD_PROGRESS_EVENT,
+    keychain, preview, site,
+};
 
 /// File extension of exported credentials.
 const CREDENTIALS_EXPORT_EXTENSION: &str = "wmzugang";
@@ -374,7 +377,7 @@ pub fn preview_status(state: State<'_, AppState>) -> Option<String> {
     }
 }
 
-/// Uploads the current version (or simulates it); progress lines arrive as events.
+/// Uploads the current version (or simulates it); output lines and progress arrive as events.
 #[tauri::command]
 pub async fn upload(
     app: AppHandle,
@@ -409,10 +412,19 @@ pub async fn upload(
     let log = std::sync::Arc::clone(&state.log);
     let emitter = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        deployment::run(&folder, &name, &record.settings, request, &mut |line| {
-            crate::push_log(&log, line);
-            let _ = emitter.emit(UPLOAD_EVENT, line);
-        })
+        deployment::run(
+            &folder,
+            &name,
+            &record.settings,
+            request,
+            &mut |line| {
+                crate::push_log(&log, line);
+                let _ = emitter.emit(UPLOAD_LINE_EVENT, line);
+            },
+            &mut |progress| {
+                let _ = emitter.emit(UPLOAD_PROGRESS_EVENT, progress);
+            },
+        )
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -546,6 +558,7 @@ pub async fn export_log(app: AppHandle, state: State<'_, AppState>) -> Result<bo
 fn node_for(
     app: &AppHandle,
     name: &str,
+    progress: &mut dyn FnMut(site::BuildProgress),
 ) -> Result<
     (
         PathBuf,
@@ -564,7 +577,10 @@ fn node_for(
         .clone()
         .unwrap_or_else(|| site::DEFAULT_NODE_VERSION.to_owned());
     let runtime =
-        wm_core::runtime::node::ensure(&version, &node_cache(app)?).map_err(|e| e.to_string())?;
+        wm_core::runtime::node::ensure_with_progress(&version, &node_cache(app)?, &mut |stage| {
+            progress(stage.into());
+        })
+        .map_err(|e| e.to_string())?;
     Ok((store.version_dir(name, &record.current), manifest, runtime))
 }
 
@@ -619,12 +635,15 @@ pub async fn build_site(
     let result = tauri::async_runtime::spawn_blocking(move || {
         let mut emit = |line: &str| {
             crate::push_log(&log, line);
-            let _ = emitter.emit(BUILD_EVENT, line);
+            let _ = emitter.emit(BUILD_LINE_EVENT, line);
+        };
+        let mut progress = |progress: site::BuildProgress| {
+            let _ = emitter.emit(BUILD_PROGRESS_EVENT, progress);
         };
         emit("preparing Node.js …");
-        let (folder, manifest, runtime) = node_for(&worker_app, &project)?;
+        let (folder, manifest, runtime) = node_for(&worker_app, &project, &mut progress)?;
         let output = manifest.build_output.as_deref().unwrap_or("dist");
-        site::build(&folder, output, &runtime, &mut emit)
+        site::build(&folder, output, &runtime, &mut emit, &mut progress)
     })
     .await
     .map_err(|e| e.to_string())?;
@@ -649,13 +668,17 @@ pub async fn start_dev(
     let worker_app = app.clone();
     let project = name.clone();
     let server = tauri::async_runtime::spawn_blocking(move || {
+        let progress_emitter = emitter.clone();
+        let mut progress = move |progress: site::BuildProgress| {
+            let _ = progress_emitter.emit(BUILD_PROGRESS_EVENT, progress);
+        };
         let emit = move |line: &str| {
             crate::push_log(&log, line);
-            let _ = emitter.emit(BUILD_EVENT, line);
+            let _ = emitter.emit(BUILD_LINE_EVENT, line);
         };
         emit("preparing Node.js …");
-        let (folder, _, runtime) = node_for(&worker_app, &project)?;
-        site::start_dev(&folder, &project, &runtime, emit)
+        let (folder, _, runtime) = node_for(&worker_app, &project, &mut progress)?;
+        site::start_dev(&folder, &project, &runtime, emit, &mut progress)
     })
     .await
     .map_err(|e| e.to_string())??;

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
+  BuildProgress,
   CommandError,
   FileEntry,
   OpenResult,
@@ -10,6 +11,7 @@ import type {
   ProjectListItem,
   ProjectSettings,
   ServerStatus,
+  UploadProgress,
   UploadRequest,
   UploadResult,
 } from "./types";
@@ -86,9 +88,13 @@ export const events = {
   onOpenRequested: (handler: () => void): Promise<UnlistenFn> =>
     listen("package-open-requested", () => handler()),
   onUploadLine: (handler: (line: string) => void): Promise<UnlistenFn> =>
-    listen<string>("upload-progress", (event) => handler(String(event.payload))),
+    listen<string>("upload-line", (event) => handler(String(event.payload))),
+  onUploadProgress: (handler: (progress: UploadProgress) => void): Promise<UnlistenFn> =>
+    listen<UploadProgress>("upload-progress", (event) => handler(event.payload)),
   onBuildLine: (handler: (line: string) => void): Promise<UnlistenFn> =>
-    listen<string>("build-progress", (event) => handler(String(event.payload))),
+    listen<string>("build-line", (event) => handler(String(event.payload))),
+  onBuildProgress: (handler: (progress: BuildProgress) => void): Promise<UnlistenFn> =>
+    listen<BuildProgress>("build-progress", (event) => handler(event.payload)),
   onServerStatus: (handler: (status: ServerStatus) => void): Promise<UnlistenFn> =>
     listen<ServerStatus>("server-status", (event) => handler(event.payload)),
 };

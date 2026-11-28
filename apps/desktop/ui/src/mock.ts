@@ -1,8 +1,9 @@
 // UI development without Rust: `npm run ui:mock` serves the window with sample data in a browser.
 // Only loaded in Vite mode "mock"; never part of a release build.
+import { emit } from "@tauri-apps/api/event";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 
-import type { FileEntry, Overview } from "./types";
+import type { BuildProgress, FileEntry, Overview, UploadProgress } from "./types";
 
 const overview: Overview = {
   name: "cafe-glueckseelig",
@@ -59,15 +60,62 @@ const files: FileEntry[] = [
 
 let preview: string | null = null;
 
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Plays upload statistics like rclone sends them, one per 400 ms. */
+async function playUpload(dryRun: boolean): Promise<void> {
+  const totalBytes = 178_898;
+  for (let tick = 0; tick <= 5; tick += 1) {
+    const share = tick / 5;
+    const progress: UploadProgress = {
+      mapping: 2,
+      mappings: 2,
+      dryRun,
+      stats: {
+        bytes: dryRun ? 0 : Math.round(totalBytes * share),
+        totalBytes: dryRun ? 0 : totalBytes,
+        transfers: dryRun ? 0 : Math.round(3 * share),
+        totalTransfers: dryRun ? 0 : 3,
+        checks: Math.round(40 * share),
+        totalChecks: 40,
+        eta: dryRun || tick === 5 ? null : 5 - tick,
+        speed: 40_000,
+        errors: 0,
+      },
+    };
+    await emit("upload-progress", progress);
+    await emit("upload-line", `    INFO: dist/file-${tick}.html: Copied (new)`);
+    await wait(400);
+  }
+}
+
+/** Plays a first build: Node.js download, unpacking, npm ci, astro build. */
+async function playBuild(lastStep: "build" | "dev-start"): Promise<void> {
+  const total = 48_000_000;
+  for (let bytes = 0; bytes <= total; bytes += 8_000_000) {
+    await emit("build-progress", { step: "node-download", current: bytes, total } satisfies BuildProgress);
+    await wait(250);
+  }
+  for (const step of ["node-extract", "dependencies", lastStep] as const) {
+    await emit("build-progress", { step, current: null, total: null } satisfies BuildProgress);
+    await emit("build-line", `${step} …`);
+    await wait(900);
+  }
+}
+
 mockWindows("main");
-mockIPC((command) => {
+mockIPC((command, args) => {
   switch (command) {
     case "list_projects":
       return [{ name: overview.name, version: overview.current.version }];
     case "project_overview":
-    case "build_site":
     case "save_settings":
       return overview;
+    case "build_site":
+      return playBuild("build").then(() => overview);
+    // Fails on purpose after its steps, to show how a failed step looks.
+    case "start_dev":
+      return playBuild("dev-start").then(() => Promise.reject({ code: "dev-start-failed", detail: "" }));
     case "server_status":
       return { preview, dev: null };
     case "start_preview":
@@ -79,9 +127,9 @@ mockIPC((command) => {
     case "list_files":
       return files;
     case "upload":
-      return new Promise((resolve) =>
-        setTimeout(
-          () =>
+      return playUpload(Boolean((args as { request?: { dryRun?: boolean } }).request?.dryRun)).then(
+        () =>
+          new Promise((resolve) =>
             resolve({
               dryRun: true,
               done: 4,
@@ -93,8 +141,7 @@ mockIPC((command) => {
               deleted: ["/site/alt.html"],
               website: overview.settings.domain ?? null,
             }),
-          1200,
-        ),
+          ),
       );
     case "read_log":
       return ["open package cafe-windows.tsweb", "package ok: cafe-glueckseelig 2026.11.30 (Known)"];

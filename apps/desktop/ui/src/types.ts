@@ -104,6 +104,38 @@ export interface ServerStatus {
   dev: string | null;
 }
 
+/** rclone statistics of the mapping being uploaded (`TransferStats` in Rust). */
+export interface TransferStats {
+  bytes: number;
+  totalBytes: number;
+  transfers: number;
+  totalTransfers: number;
+  checks: number;
+  totalChecks: number;
+  /** Seconds left, null while unknown. */
+  eta: number | null;
+  speed: number;
+  errors: number;
+}
+
+/** Event `upload-progress`. */
+export interface UploadProgress {
+  /** 1-based number of the mapping being uploaded. */
+  mapping: number;
+  mappings: number;
+  dryRun: boolean;
+  stats: TransferStats;
+}
+
+export type BuildStep = "node-download" | "node-extract" | "dependencies" | "build" | "dev-start";
+
+/** Event `build-progress`; `current`/`total` are bytes while Node.js is downloaded. */
+export interface BuildProgress {
+  step: BuildStep;
+  current: number | null;
+  total: number | null;
+}
+
 /** Error as sent by the commands (`CommandError` in Rust). */
 export interface CommandError {
   code: string | null;

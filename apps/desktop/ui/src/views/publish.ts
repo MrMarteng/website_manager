@@ -2,9 +2,11 @@
 import { attempt, setOverview } from "../actions";
 import { api, events, toApiError } from "../api";
 import { confirmDialog } from "../components/dialog";
+import { clearProgress, failProgress, hasFailed, renderProgress, resetProgress, setProgress } from "../components/progress";
 import { toast } from "../components/toast";
 import { button, h, icon } from "../dom";
 import { errorText, t } from "../i18n";
+import { uploadProgressView } from "../progressText";
 import { state, update, whileBusy } from "../store";
 import type { Overview, UploadRequest, UploadResult } from "../types";
 
@@ -17,8 +19,11 @@ interface PublishState {
   check: UploadResult | null;
   done: UploadResult | null;
   allowOlder: boolean;
-  line: string;
+  /** Which run the progress display belongs to (shown under that step). */
+  phase: "check" | "upload" | null;
 }
+
+const PROGRESS_ID = "upload-progress";
 
 const states = new Map<string, PublishState>();
 
@@ -33,7 +38,7 @@ function publishState(name: string): PublishState {
       check: null,
       done: null,
       allowOlder: false,
-      line: "",
+      phase: null,
     };
     states.set(name, current);
   }
@@ -45,15 +50,10 @@ export function resetPublish(name: string): void {
   states.delete(name);
 }
 
-/** Shows the latest rclone line under the progress bar; called once at start-up. */
+/** Feeds upload output and statistics into the progress display; called once at start-up. */
 export function listenToUploadLines(): void {
-  void events.onUploadLine((line) => {
-    const name = state.project?.name;
-    if (!name) return;
-    publishState(name).line = line.trim();
-    const element = document.getElementById("upload-line");
-    if (element) element.textContent = line.trim();
-  });
+  void events.onUploadLine((line) => setProgress(PROGRESS_ID, { line: line.trim() }));
+  void events.onUploadProgress((progress) => setProgress(PROGRESS_ID, uploadProgressView(progress)));
 }
 
 function request(form: PublishState, dryRun: boolean): UploadRequest {
@@ -67,9 +67,13 @@ function request(form: PublishState, dryRun: boolean): UploadRequest {
 
 /** Runs an upload; asks once if the target has a newer version. */
 async function run(project: Overview, form: PublishState, dryRun: boolean): Promise<UploadResult | undefined> {
-  form.line = "";
+  form.phase = dryRun ? "check" : "upload";
+  resetProgress(PROGRESS_ID, dryRun ? t("progressChecking") : t("progressUploading"));
   try {
-    return await whileBusy("upload", () => api.upload(project.name, request(form, dryRun)));
+    const result = await whileBusy("upload", () => api.upload(project.name, request(form, dryRun)));
+    clearProgress(PROGRESS_ID);
+    form.phase = null;
+    return result;
   } catch (error) {
     const apiError = toApiError(error);
     if (apiError.code === "newer-on-server" && !form.allowOlder) {
@@ -79,10 +83,12 @@ async function run(project: Overview, form: PublishState, dryRun: boolean): Prom
         confirmLabel: t("newerAction"),
         danger: true,
       });
+      form.phase = null;
       if (!replace) return undefined;
       form.allowOlder = true;
       return run(project, form, dryRun);
     }
+    failProgress(PROGRESS_ID);
     toast(errorText(apiError), "error");
     return undefined;
   }
@@ -210,14 +216,8 @@ export function renderPublish(project: Overview): HTMLElement {
     else rerender();
   };
 
-  const progress = busy
-    ? h(
-        "div",
-        { class: "progress", role: "status" },
-        h("div", { class: "progress-bar indeterminate", role: "progressbar", "aria-label": t("working") }),
-        h("p", { class: "small muted", id: "upload-line" }, form.line),
-      )
-    : null;
+  const progressFor = (phase: PublishState["phase"]) =>
+    form.phase === phase && (busy || hasFailed(PROGRESS_ID)) ? renderProgress(PROGRESS_ID) : null;
 
   const checkResult = form.check
     ? h(
@@ -270,7 +270,7 @@ export function renderPublish(project: Overview): HTMLElement {
       !form.check && !form.done,
       Boolean(form.check),
       h("div", { class: "row" }, button(t("checkAction"), () => void check(), { iconName: "refresh", disabled: busy })),
-      !form.check && busy ? progress : null,
+      progressFor("check"),
       checkResult,
     ),
     step(
@@ -287,7 +287,7 @@ export function renderPublish(project: Overview): HTMLElement {
           disabled: busy || !form.check || (!form.check.uploadedCount && !form.check.deletedCount),
         }),
       ),
-      form.check && busy ? progress : null,
+      progressFor("upload"),
       doneResult,
     ),
   );

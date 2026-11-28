@@ -11,8 +11,9 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
 use serde_json::Value;
-use wm_core::runtime::node::NodeRuntime;
+use wm_core::runtime::node::{NodeProgress, NodeRuntime};
 
 use crate::tools;
 
@@ -24,6 +25,51 @@ const SHELL_SYNTAX: &[&str] = &["&&", "||", "|", ";", ">", "<", "$(", "`", "\n"]
 const DEV_START_TIMEOUT: Duration = Duration::from_secs(90);
 /// Grace period between asking processes to stop and killing them.
 const STOP_GRACE: Duration = Duration::from_secs(5);
+
+/// Step of preparing, building or starting a website; steps with nothing to do are skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum BuildStep {
+    NodeDownload,
+    NodeExtract,
+    Dependencies,
+    Build,
+    DevStart,
+}
+
+/// Progress event for the window: the running step, with bytes for the Node.js download.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildProgress {
+    pub step: BuildStep,
+    pub current: Option<u64>,
+    pub total: Option<u64>,
+}
+
+impl BuildProgress {
+    /// A step without a measurable amount.
+    #[must_use]
+    pub fn step(step: BuildStep) -> Self {
+        Self {
+            step,
+            current: None,
+            total: None,
+        }
+    }
+}
+
+impl From<NodeProgress> for BuildProgress {
+    fn from(progress: NodeProgress) -> Self {
+        match progress {
+            NodeProgress::Download { bytes, total } => Self {
+                step: BuildStep::NodeDownload,
+                current: Some(bytes),
+                total,
+            },
+            NodeProgress::Extract => Self::step(BuildStep::NodeExtract),
+        }
+    }
+}
 
 /// An npm script split into environment, program and arguments.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -308,6 +354,7 @@ pub fn ensure_dependencies(
     project: &Path,
     runtime: &NodeRuntime,
     log: &mut dyn FnMut(&str),
+    progress: &mut dyn FnMut(BuildProgress),
 ) -> Result<(), String> {
     let installed = project.join("node_modules/.package-lock.json");
     let lockfile = project.join("package-lock.json");
@@ -320,6 +367,7 @@ pub fn ensure_dependencies(
         log("dependencies are up to date");
         return Ok(());
     }
+    progress(BuildProgress::step(BuildStep::Dependencies));
     log("installing dependencies (npm ci --ignore-scripts) …");
     let mut command = Command::new(&runtime.node);
     command
@@ -356,10 +404,12 @@ pub fn build(
     build_output: &str,
     runtime: &NodeRuntime,
     log: &mut dyn FnMut(&str),
+    progress: &mut dyn FnMut(BuildProgress),
 ) -> Result<(), String> {
     let project = version_folder.join("project");
-    ensure_dependencies(&project, runtime, log)?;
+    ensure_dependencies(&project, runtime, log, progress)?;
     let script = read_script(&project, "build")?;
+    progress(BuildProgress::step(BuildStep::Build));
     log(&format!(
         "building: {} {}",
         script.program,
@@ -431,10 +481,12 @@ pub fn start_dev(
     project_name: &str,
     runtime: &NodeRuntime,
     log: impl Fn(&str) + Send + 'static,
+    progress: &mut dyn FnMut(BuildProgress),
 ) -> Result<DevServer, String> {
     let project = version_folder.join("project");
-    ensure_dependencies(&project, runtime, &mut |line| log(line))?;
+    ensure_dependencies(&project, runtime, &mut |line| log(line), progress)?;
     let mut script = read_script(&project, "dev")?;
+    progress(BuildProgress::step(BuildStep::DevStart));
     if script.program == "astro" && script.args.first().is_some_and(|arg| arg == "dev") {
         // Astro ≥ 7.4 may restart itself detached; keep it in our process group.
         script.args.push("--ignore-lock".into());
@@ -505,6 +557,22 @@ pub fn start_dev(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn progress_events_have_stable_names() {
+        let download = BuildProgress::from(NodeProgress::Download {
+            bytes: 5,
+            total: Some(10),
+        });
+        assert_eq!(
+            serde_json::to_value(download).unwrap(),
+            serde_json::json!({"step": "node-download", "current": 5, "total": 10})
+        );
+        assert_eq!(
+            serde_json::to_value(BuildProgress::step(BuildStep::DevStart)).unwrap()["step"],
+            "dev-start"
+        );
+    }
 
     #[test]
     fn scripts_are_split_without_a_shell() {

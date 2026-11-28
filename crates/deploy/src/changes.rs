@@ -1,4 +1,7 @@
-//! Reads file changes from rclone's `--verbose` output (real runs and dry runs).
+//! Reads rclone's JSON log (`--use-json-log --verbose --stats …`): file changes for real runs
+//! and dry runs, transfer statistics for the progress display, and readable log text.
+
+use serde::{Deserialize, Serialize};
 
 /// Kind of change to a file on the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,63 +10,161 @@ pub enum ChangeKind {
     Delete,
 }
 
-/// Recognises a file change in one rclone log line; the path is relative to the mapping.
+/// Transfer statistics rclone reports every second (and once at the end).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TransferStats {
+    pub bytes: u64,
+    pub total_bytes: u64,
+    pub transfers: u64,
+    pub total_transfers: u64,
+    pub checks: u64,
+    pub total_checks: u64,
+    /// Estimated seconds left; `None` while rclone cannot tell.
+    pub eta: Option<f64>,
+    /// Bytes per second.
+    pub speed: f64,
+    pub errors: u64,
+}
+
+/// Meaning of one line of rclone output.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LogEvent {
+    /// A file was (or in a dry run would be) uploaded or deleted; path relative to the mapping.
+    Change {
+        kind: ChangeKind,
+        path: String,
+        text: String,
+    },
+    /// Periodic statistics; `text` is rclone's multi-line summary.
+    Stats { stats: TransferStats, text: String },
+    /// Any other message, already formatted for the log.
+    Text(String),
+}
+
+#[derive(Deserialize)]
+struct JsonLine {
+    #[serde(default)]
+    level: String,
+    #[serde(default)]
+    msg: String,
+    object: Option<String>,
+    stats: Option<TransferStats>,
+}
+
+/// Interprets one line of rclone output. Lines that are not JSON (for example a crash message)
+/// are passed through as text.
 #[must_use]
-pub fn parse_line(line: &str) -> Option<(ChangeKind, String)> {
-    let rest = ["NOTICE: ", "INFO  : "]
-        .iter()
-        .find_map(|marker| line.split_once(marker).map(|(_, rest)| rest))?;
-    let patterns = [
-        (": Skipped copy as --dry-run", ChangeKind::Upload),
-        (": Skipped delete as --dry-run", ChangeKind::Delete),
-        (": Copied (", ChangeKind::Upload),
-        (": Updated modification time", ChangeKind::Upload),
-    ];
-    for (pattern, kind) in patterns {
-        if let Some((path, _)) = rest.split_once(pattern) {
-            return Some((kind, path.to_owned()));
-        }
+pub fn parse_json_line(line: &str) -> LogEvent {
+    let Ok(entry) = serde_json::from_str::<JsonLine>(line) else {
+        return LogEvent::Text(line.to_owned());
+    };
+    if let Some(stats) = entry.stats {
+        return LogEvent::Stats {
+            stats,
+            text: entry.msg.trim().to_owned(),
+        };
     }
-    rest.strip_suffix(": Deleted")
-        .map(|path| (ChangeKind::Delete, path.to_owned()))
+    let level = entry.level.to_uppercase();
+    let Some(object) = entry.object else {
+        return LogEvent::Text(format!("{level}: {}", entry.msg));
+    };
+    let text = format!("{level}: {object}: {}", entry.msg);
+    match change_kind(&entry.msg) {
+        Some(kind) => LogEvent::Change {
+            kind,
+            path: object,
+            text,
+        },
+        None => LogEvent::Text(text),
+    }
+}
+
+fn change_kind(message: &str) -> Option<ChangeKind> {
+    let uploads = [
+        "Skipped copy as --dry-run",
+        "Copied (",
+        "Updated modification time",
+    ];
+    if uploads.iter().any(|prefix| message.starts_with(prefix)) {
+        Some(ChangeKind::Upload)
+    } else if message.starts_with("Skipped delete as --dry-run") || message == "Deleted" {
+        Some(ChangeKind::Delete)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn change(line: &str) -> Option<(ChangeKind, String)> {
+        match parse_json_line(line) {
+            LogEvent::Change { kind, path, .. } => Some((kind, path)),
+            _ => None,
+        }
+    }
+
     #[test]
-    fn dry_run_and_real_lines() {
+    fn dry_run_and_real_changes() {
         let cases = [
             (
-                "2026/11/27 08:09:14 NOTICE: sub/b.css: Skipped copy as --dry-run is set (size 2)",
+                r#"{"level":"notice","msg":"Skipped copy as --dry-run is set (size 2)","skipped":"copy","size":2,"object":"sub/b.css","objectType":"*local.Object"}"#,
                 Some((ChangeKind::Upload, "sub/b.css")),
             ),
             (
-                "2026/11/27 08:09:14 NOTICE: alt.html: Skipped delete as --dry-run is set (size 4)",
+                r#"{"level":"notice","msg":"Skipped delete as --dry-run is set (size 4)","object":"alt.html"}"#,
                 Some((ChangeKind::Delete, "alt.html")),
             ),
             (
-                "2026/11/27 08:09:22 INFO  : a.html: Copied (new)",
+                r#"{"level":"info","msg":"Copied (new)","size":2,"object":"a.html"}"#,
                 Some((ChangeKind::Upload, "a.html")),
             ),
             (
-                "2026/11/27 08:09:22 INFO  : alt.html: Deleted",
+                r#"{"level":"info","msg":"Deleted","object":"alt.html"}"#,
                 Some((ChangeKind::Delete, "alt.html")),
             ),
             (
-                "2026/11/27 08:09:14 NOTICE: sub: Skipped set directory modification time as --dry-run is set",
+                r#"{"level":"notice","msg":"Skipped set directory modification time as --dry-run is set","object":"sub","objectType":"string"}"#,
                 None,
             ),
-            ("Transferred:   4 B / 4 B, 100%", None),
         ];
         for (line, expected) in cases {
-            let parsed = parse_line(line);
             assert_eq!(
-                parsed.as_ref().map(|(kind, path)| (*kind, path.as_str())),
-                expected,
+                change(line),
+                expected.map(|(kind, path)| (kind, path.to_owned())),
                 "{line}"
             );
         }
+    }
+
+    #[test]
+    fn statistics_and_text() {
+        let line = r#"{"level":"notice","msg":"\nTransferred: 1 KiB / 2 KiB, 50%\n\n","stats":{"bytes":1024,"totalBytes":2048,"transfers":1,"totalTransfers":2,"eta":3,"speed":512.5,"errors":0,"elapsedTime":1.2}}"#;
+        let LogEvent::Stats { stats, text } = parse_json_line(line) else {
+            panic!("statistics expected");
+        };
+        assert_eq!((stats.bytes, stats.total_bytes), (1024, 2048));
+        assert_eq!((stats.transfers, stats.total_transfers), (1, 2));
+        assert_eq!(stats.eta, Some(3.0));
+        assert_eq!(text, "Transferred: 1 KiB / 2 KiB, 50%");
+
+        let no_eta = r#"{"level":"notice","msg":"","stats":{"bytes":0,"eta":null}}"#;
+        assert!(matches!(
+            parse_json_line(no_eta),
+            LogEvent::Stats {
+                stats: TransferStats { eta: None, .. },
+                ..
+            }
+        ));
+        assert_eq!(
+            parse_json_line(r#"{"level":"error","msg":"connection refused"}"#),
+            LogEvent::Text("ERROR: connection refused".into())
+        );
+        assert_eq!(
+            parse_json_line("panic: boom"),
+            LogEvent::Text("panic: boom".into())
+        );
     }
 }
