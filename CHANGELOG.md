@@ -5,6 +5,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-28
+
+Cancel long-running tasks; fix for stopping development mode on Linux.
+
 ### Added
 
 - Rebuild, start of development mode, checking changes and uploading can be cancelled from the
@@ -160,7 +164,8 @@ Feasibility state (phase 0), tested on macOS only.
 - Documentation: architecture, formats, changelog, spike report, Rust guideline with rules for
   maintaining documentation and Semantic Versioning; test for consistent version numbers.
 
-[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/MrMarteng/website_manager/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/MrMarteng/website_manager/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/MrMarteng/website_manager/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/MrMarteng/website_manager/compare/v0.3.2...v0.4.0
 [0.3.2]: https://github.com/MrMarteng/website_manager/compare/v0.3.1...v0.3.2
